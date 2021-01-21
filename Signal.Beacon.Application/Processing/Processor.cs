@@ -48,9 +48,9 @@ namespace Signal.Beacon.Application.Processing
         
         private async Task ProcessStateChangedAsync(DeviceTarget target, CancellationToken cancellationToken)
         {
-            var processes = await this.processesService.GetAllAsync(cancellationToken);
+            var processes = await this.processesService.GetStateTriggeredAsync(cancellationToken);
             var applicableProcesses = processes
-                .Where(p => p.Triggers?.Any(t => t == target) ?? false)
+                .Where(p => !p.IsDisabled && (p.Triggers?.Any(t => t == target) ?? false))
                 .ToList();
             if (!applicableProcesses.Any())
             {
@@ -68,13 +68,13 @@ namespace Signal.Beacon.Application.Processing
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogWarning(ex, "Process condition invalid. Recheck your configuration. ProcessName: {ProcessName}", process.Name);
+                    this.logger.LogWarning(ex, "StateTriggerProcess condition invalid. Recheck your configuration. ProcessName: {ProcessName}", process.Alias);
                 }
 
                 if (!result) 
                     continue;
 
-                this.logger.LogInformation("Executing \"{ProcessName}\"... (trigger {Target})", process.Name, target);
+                this.logger.LogInformation("Executing \"{ProcessName}\"... (trigger {Target})", process.Alias, target);
 
                 // Publish conduct
                 await this.conductManager.PublishAsync(process.Conducts, cancellationToken);

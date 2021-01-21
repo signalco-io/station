@@ -28,7 +28,6 @@ namespace Signal.Beacon.Application
             services.AddTransient<IProcessesService, ProcessesService>();
             services.AddSingleton<IDevicesDao, DevicesDao>();
             services.AddSingleton<IProcessesDao, ProcessesDao>();
-            services.AddSingleton<IProcessesRepository, ProcessesRepository>();
             services.AddSingleton<IDeviceStateManager, DeviceStateManager>();
 
             // MQTT

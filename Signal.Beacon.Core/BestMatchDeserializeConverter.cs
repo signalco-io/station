@@ -5,7 +5,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Signal.Beacon.Configuration
+namespace Signal.Beacon.Core
 {
     public class BestMatchDeserializeConverter<TContract> : JsonConverter
     {

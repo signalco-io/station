@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Signal.Beacon.Core;
 using Signal.Beacon.Core.Conditions;
 using Signal.Beacon.Core.Configuration;
 
@@ -11,14 +12,11 @@ namespace Signal.Beacon.Configuration
 {
     public class FileSystemConfigurationService : IConfigurationService
     {
-        private readonly ILogger<FileSystemConfigurationService> logger;
         private readonly JsonSerializerSettings deserializationSettings;
         private readonly JsonSerializerSettings serializationSettings;
 
         public FileSystemConfigurationService(ILogger<FileSystemConfigurationService> logger)
         {
-            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
             this.serializationSettings = new JsonSerializerSettings
             {
                 NullValueHandling = NullValueHandling.Include,
@@ -39,7 +37,7 @@ namespace Signal.Beacon.Configuration
                 }
             };
 
-            this.logger.LogDebug("Configuration path: {AbsolutePath}", AsAbsolutePath(""));
+            logger.LogDebug("Configuration path: {AbsolutePath}", AsAbsolutePath(""));
         }
 
         public async Task<T> LoadAsync<T>(string name, CancellationToken cancellationToken) where T : new() =>

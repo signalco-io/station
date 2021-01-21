@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Processes;
+using Signal.Beacon.Core.Signal;
 using Signal.Beacon.Core.Values;
 
 namespace Signal.Beacon.Api.Controllers.V1
