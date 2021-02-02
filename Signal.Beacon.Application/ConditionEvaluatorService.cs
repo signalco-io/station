@@ -89,7 +89,7 @@ namespace Signal.Beacon.Application
             }
         }
 
-        private bool OperationLessThan(object? leftResult, object? rightResult)
+        private static bool OperationLessThan(object? leftResult, object? rightResult)
         {
             if (double.TryParse(leftResult?.ToString(), out var leftNum) &&
                 double.TryParse(rightResult?.ToString(), out var rightNum))
@@ -97,7 +97,7 @@ namespace Signal.Beacon.Application
             return false;
         }
 
-        private bool OperationGreaterThan(object? leftResult, object? rightResult)
+        private static bool OperationGreaterThan(object? leftResult, object? rightResult)
         {
             if (double.TryParse(leftResult?.ToString(), out var leftNum) &&
                 double.TryParse(rightResult?.ToString(), out var rightNum))
