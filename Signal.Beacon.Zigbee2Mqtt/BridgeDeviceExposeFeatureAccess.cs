@@ -1,6 +1,6 @@
 using System;
 
-namespace Signal.Beacon.Zigbee2Mqtt
+namespace Signal.Beacon.Channel.Zigbee2Mqtt
 {
     [Flags]
     internal enum BridgeDeviceExposeFeatureAccess

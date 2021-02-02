@@ -9,19 +9,17 @@ using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Channel.PhilipsHue;
 using Signal.Beacon.Channel.Signal;
 using Signal.Beacon.Channel.Tasmota;
+using Signal.Beacon.Channel.Zigbee2Mqtt;
 using Signal.Beacon.Configuration;
-using Signal.Beacon.Zigbee2Mqtt;
+using Signal.Beacon.Core.Helpers;
 
-namespace Signal.Beacon.WorkerService
+namespace Signal.Beacon
 {
-    public class Program
+    public static class Program
     {
-        public static void Main(string[] args)
-        {
-            CreateHostBuilder(args).Build().Run();
-        }
+        public static void Main(string[] args) => CreateHostBuilder(args).Build().Run();
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
+        private static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {

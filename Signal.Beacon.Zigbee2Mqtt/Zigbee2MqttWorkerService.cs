@@ -14,7 +14,7 @@ using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Workers;
 
-namespace Signal.Beacon.Zigbee2Mqtt
+namespace Signal.Beacon.Channel.Zigbee2Mqtt
 {
     internal class Zigbee2MqttWorkerService : IWorkerService
     {

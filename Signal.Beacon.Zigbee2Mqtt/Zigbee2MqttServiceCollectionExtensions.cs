@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Signal.Beacon.Core.Workers;
 
-namespace Signal.Beacon.Zigbee2Mqtt
+namespace Signal.Beacon.Channel.Zigbee2Mqtt
 {
     public static class Zigbee2MqttServiceCollectionExtensions
     {

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Signal.Beacon.Zigbee2Mqtt
+namespace Signal.Beacon.Channel.Zigbee2Mqtt
 {
     internal class BridgeDevice
     {

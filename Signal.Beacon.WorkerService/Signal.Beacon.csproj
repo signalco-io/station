@@ -20,6 +20,6 @@
     <ProjectReference Include="..\Signal.Beacon.Core\Signal.Beacon.Core.csproj" />
     <ProjectReference Include="..\Signal.Beacon.PhilipsHue\Signal.Beacon.Channel.PhilipsHue.csproj" />
     <ProjectReference Include="..\Signal.Beacon.Voice\Signal.Beacon.Voice.csproj" />
-    <ProjectReference Include="..\Signal.Beacon.Zigbee2Mqtt\Signal.Beacon.Zigbee2Mqtt.csproj" />
+    <ProjectReference Include="..\Signal.Beacon.Zigbee2Mqtt\Signal.Beacon.Channel.Zigbee2Mqtt.csproj" />
   </ItemGroup>
 </Project>
