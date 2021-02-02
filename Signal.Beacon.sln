@@ -11,7 +11,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.Zigbee2Mqtt", "Signal.Beacon.Zigbee2Mqtt\Signal.Beacon.Channel.Zigbee2Mqtt.csproj", "{9EF544E3-5B7B-4CB5-ACDC-6AA95B095A35}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.Zigbee2Mqtt", "Signal.Beacon.Channel.Zigbee2Mqtt\Signal.Beacon.Channel.Zigbee2Mqtt.csproj", "{9EF544E3-5B7B-4CB5-ACDC-6AA95B095A35}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Core", "Signal.Beacon.Core\Signal.Beacon.Core.csproj", "{AD2EBEAC-9096-4B92-BE1A-B8CB0D146C52}"
 EndProject
@@ -19,7 +19,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Configuration
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Application", "Signal.Beacon.Application\Signal.Beacon.Application.csproj", "{42B4DD12-8328-4444-BB15-685812B3FDF3}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.PhilipsHue", "Signal.Beacon.PhilipsHue\Signal.Beacon.Channel.PhilipsHue.csproj", "{3F45A199-EDD7-439D-937A-D2CAE36DC66C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.PhilipsHue", "Signal.Beacon.Channel.PhilipsHue\Signal.Beacon.Channel.PhilipsHue.csproj", "{3F45A199-EDD7-439D-937A-D2CAE36DC66C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Voice", "Signal.Beacon.Voice\Signal.Beacon.Voice.csproj", "{EE74B50A-41F7-4613-85F9-BBCD691482C9}"
 EndProject
