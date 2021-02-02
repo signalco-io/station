@@ -1,4 +1,4 @@
-﻿namespace Signal.Beacon.PhilipsHue
+﻿namespace Signal.Beacon.Channel.PhilipsHue
 {
     internal class PhilipsHueLight
     {

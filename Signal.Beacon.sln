@@ -19,7 +19,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Configuration
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Application", "Signal.Beacon.Application\Signal.Beacon.Application.csproj", "{42B4DD12-8328-4444-BB15-685812B3FDF3}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.PhilipsHue", "Signal.Beacon.PhilipsHue\Signal.Beacon.PhilipsHue.csproj", "{3F45A199-EDD7-439D-937A-D2CAE36DC66C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.PhilipsHue", "Signal.Beacon.PhilipsHue\Signal.Beacon.Channel.PhilipsHue.csproj", "{3F45A199-EDD7-439D-937A-D2CAE36DC66C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Api", "Signal.Beacon.Api\Signal.Beacon.Api.csproj", "{385327C7-3152-435E-B46C-E12E8696672D}"
 EndProject
@@ -29,7 +29,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.Broad
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.Tasmota", "Signal.Beacon.Channel.Tasmota\Signal.Beacon.Channel.Tasmota.csproj", "{2D7C3DDA-1CEC-4D92-9650-B321D172D983}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Signal.Beacon.Channel.Signal", "Signal.Beacon.Channel.Signal\Signal.Beacon.Channel.Signal.csproj", "{D5D1219A-EC89-491A-875E-89A88E125342}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.Signal", "Signal.Beacon.Channel.Signal\Signal.Beacon.Channel.Signal.csproj", "{D5D1219A-EC89-491A-875E-89A88E125342}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

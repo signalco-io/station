@@ -1,9 +1,9 @@
 ﻿using System;
 using Q42.HueApi.Interfaces;
 
-namespace Signal.Beacon.PhilipsHue
+namespace Signal.Beacon.Channel.PhilipsHue
 {
-    public class BridgeConnection
+    internal class BridgeConnection
     {
         public BridgeConnection(BridgeConfig config, ILocalHueClient localClient)
         {

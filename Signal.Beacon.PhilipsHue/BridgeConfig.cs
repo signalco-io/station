@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace Signal.Beacon.PhilipsHue
+namespace Signal.Beacon.Channel.PhilipsHue
 {
-    public class BridgeConfig
+    internal class BridgeConfig
     {
         public BridgeConfig(string id, string ipAddress, string localAppKey)
         {
@@ -18,10 +18,10 @@ namespace Signal.Beacon.PhilipsHue
             this.LocalAppKey = localAppKey;
         }
 
-        public string Id { get; init; }
+        public string Id { get; }
 
         public string IpAddress { get; set; }
 
-        public string LocalAppKey { get; set; }
+        public string LocalAppKey { get; }
     }
 }

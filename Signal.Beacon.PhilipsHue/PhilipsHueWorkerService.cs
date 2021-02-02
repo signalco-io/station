@@ -14,7 +14,7 @@ using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Workers;
 
-namespace Signal.Beacon.PhilipsHue
+namespace Signal.Beacon.Channel.PhilipsHue
 {
     internal class PhilipsHueWorkerService : IWorkerService
     {

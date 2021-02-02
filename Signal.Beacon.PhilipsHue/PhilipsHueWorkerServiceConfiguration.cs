@@ -1,9 +1,9 @@
 ﻿using System.Collections.Generic;
 
-namespace Signal.Beacon.PhilipsHue
+namespace Signal.Beacon.Channel.PhilipsHue
 {
     internal class PhilipsHueWorkerServiceConfiguration
     {
-        public List<BridgeConfig> Bridges { get; set; } = new();
+        public List<BridgeConfig> Bridges { get; } = new();
     }
 }

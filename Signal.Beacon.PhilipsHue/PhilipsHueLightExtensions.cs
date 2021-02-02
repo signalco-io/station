@@ -1,6 +1,6 @@
 ﻿using Q42.HueApi;
 
-namespace Signal.Beacon.PhilipsHue
+namespace Signal.Beacon.Channel.PhilipsHue
 {
     internal static class PhilipsHueLightExtensions
     {
