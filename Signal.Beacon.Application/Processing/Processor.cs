@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Application.Conducts;
 using Signal.Beacon.Core.Conditions;
+using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Processes;
 
@@ -58,27 +60,30 @@ namespace Signal.Beacon.Application.Processing
                 return;
             }
 
-            // Execute triggers that meet conditions
+            // Collect all process conducts that meet conditions
+            var conducts = new List<Conduct>();
             foreach (var process in applicableProcesses)
             {
-                var result = false;
                 try
                 {
-                    result = await this.conditionEvaluatorService.IsConditionMetAsync(process.Condition, cancellationToken);
+                    // Ignore if condition not met
+                    if (!await this.conditionEvaluatorService.IsConditionMetAsync(process.Condition, cancellationToken))
+                        continue;
+
+                    // Queue conducts
+                    this.logger.LogInformation(
+                        "Process \"{ProcessName}\" queued... (trigger {Target})",
+                        process.Alias, target);
+                    conducts.AddRange(process.Conducts);
                 }
                 catch (Exception ex)
                 {
                     this.logger.LogWarning(ex, "StateTriggerProcess condition invalid. Recheck your configuration. ProcessName: {ProcessName}", process.Alias);
                 }
-
-                if (!result) 
-                    continue;
-
-                this.logger.LogInformation("Executing \"{ProcessName}\"... (trigger {Target})", process.Alias, target);
-
-                // Publish conduct
-                await this.conductManager.PublishAsync(process.Conducts, cancellationToken);
             }
+
+            // Execute all conducts
+            await this.conductManager.PublishAsync(conducts, cancellationToken);
         }
     }
 }
