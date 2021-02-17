@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Signal.Beacon.Application;
 using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Channel.PhilipsHue;
+using Signal.Beacon.Channel.Samsung;
 using Signal.Beacon.Channel.Signal;
 using Signal.Beacon.Channel.Tasmota;
 using Signal.Beacon.Channel.Zigbee2Mqtt;
@@ -28,7 +29,8 @@ namespace Signal.Beacon
                         .AddZigbee2Mqtt()
                         .AddTasmota()
                         .AddSignal()
-                        .AddPhilipsHue();
+                        .AddPhilipsHue()
+                        .AddSamsung();
                     //.AddVoice();
 
                     services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));

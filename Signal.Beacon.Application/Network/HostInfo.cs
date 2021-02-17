@@ -12,6 +12,8 @@ namespace Signal.Beacon.Application.Network
 
         public IEnumerable<int> OpenPorts { get; init; } = Enumerable.Empty<int>();
 
+        public string? PhysicalAddress { get; init; }
+
         public HostInfo(string ipAddress, long ping)
         {
             this.IpAddress = ipAddress;
