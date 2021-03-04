@@ -118,13 +118,12 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             try
             {
                 var client = this.mqttClientFactory.Create();
-
                 if (string.IsNullOrWhiteSpace(mqttServerConfig.Url))
                 {
                     this.logger.LogWarning("MQTT Server has invalid URL: {Url}", mqttServerConfig.Url);
                     return;
                 }
-
+                
                 await client.StartAsync("Signal.Beacon.Channel.Zigbee2Mqtt", mqttServerConfig.Url, this.startCancellationToken);
                 await client.SubscribeAsync(
                     MqttTopicSubscription,
