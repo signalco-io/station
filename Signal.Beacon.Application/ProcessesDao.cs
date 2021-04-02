@@ -96,7 +96,7 @@ namespace Signal.Beacon.Application
 
                 this.getProcessesTask ??= this.processesClient.GetProcessesAsync(cancellationToken);
 
-                var remoteDevices = (await this.getProcessesTask).ToList();
+                var remoteProcesses = (await this.getProcessesTask).ToList();
 
                 lock (this.cacheLock)
                 {
@@ -106,10 +106,10 @@ namespace Signal.Beacon.Application
                     try
                     {
                         this.processes = new List<Process>();
-                        foreach (var deviceConfiguration in remoteDevices)
-                            this.processes.Add(deviceConfiguration);
+                        foreach (var process in remoteProcesses)
+                            this.processes.Add(process);
 
-                        // Invalidate other caches
+                        // Invalidate dependency caches
                         this.stateTriggerProcesses = null;
 
                         this.logger.LogDebug("Loaded {ProcessesCount} processes.", this.processes.Count);
@@ -122,7 +122,7 @@ namespace Signal.Beacon.Application
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Failed to cache devices.");
+                this.logger.LogDebug(ex, "Failed to cache processes.");
                 throw;
             }
         }

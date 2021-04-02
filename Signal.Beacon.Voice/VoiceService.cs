@@ -266,6 +266,8 @@ namespace Signal.Beacon.Voice
                     if (captureDeviceName == null)
                         throw new Exception("No capture devices available");
 
+                    this.logger.LogDebug("Using input device: {InputDeviceName}", captureDeviceName);
+
                     this.InitializeCaptureDevice(captureDeviceName, 1600);
                     this.StartCaptureDevice();
 

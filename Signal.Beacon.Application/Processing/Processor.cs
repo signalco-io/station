@@ -9,6 +9,7 @@ using Signal.Beacon.Core.Conditions;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Processes;
+using Signal.Beacon.Core.Structures.Queues;
 
 namespace Signal.Beacon.Application.Processing
 {
@@ -19,6 +20,9 @@ namespace Signal.Beacon.Application.Processing
         private readonly IDeviceStateManager deviceStateManager;
         private readonly IConductManager conductManager;
         private readonly ILogger<Processor> logger;
+
+        private readonly IDelayedQueue<Conduct> delayedConducts = new DelayedQueue<Conduct>();
+
 
         public Processor(
             IConditionEvaluatorService conditionEvaluatorService,
@@ -39,8 +43,15 @@ namespace Signal.Beacon.Application.Processing
         {
             // Subscribe to state changes
             this.deviceStateManager.Subscribe(this.ProcessStateChangedAsync);
+            _ = Task.Run(() => this.DelayedConductsLoop(cancellationToken), cancellationToken);
 
             return Task.CompletedTask;
+        }
+
+        private async Task DelayedConductsLoop(CancellationToken cancellationToken)
+        {
+            await foreach (var conduct in this.delayedConducts.WithCancellation(cancellationToken)) 
+                await this.conductManager.PublishAsync(new[] {conduct}, cancellationToken);
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
@@ -52,7 +63,7 @@ namespace Signal.Beacon.Application.Processing
         {
             var processes = await this.processesService.GetStateTriggeredAsync(cancellationToken);
             var applicableProcesses = processes
-                .Where(p => !p.IsDisabled && (p.Triggers?.Any(t => t == target) ?? false))
+                .Where(p => !p.IsDisabled && p.Triggers.Any(t => t == target))
                 .ToList();
             if (!applicableProcesses.Any())
             {
@@ -82,8 +93,12 @@ namespace Signal.Beacon.Application.Processing
                 }
             }
 
-            // Execute all conducts
-            await this.conductManager.PublishAsync(conducts, cancellationToken);
+            // Execute all immediate conducts
+            await this.conductManager.PublishAsync(conducts.Where(c => c.Delay <= 0), cancellationToken);
+
+            // Queue delayed conducts
+            foreach (var delayedConduct in conducts.Where(c => c.Delay > 0))
+                this.delayedConducts.Enqueue(delayedConduct, TimeSpan.FromMilliseconds(delayedConduct.Delay));
         }
     }
 }

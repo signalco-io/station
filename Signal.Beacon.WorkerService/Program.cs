@@ -10,6 +10,7 @@ using Signal.Beacon.Channel.Tasmota;
 using Signal.Beacon.Channel.Zigbee2Mqtt;
 using Signal.Beacon.Configuration;
 using Signal.Beacon.Core.Helpers;
+using Signal.Beacon.Voice;
 
 namespace Signal.Beacon
 {
@@ -31,7 +32,7 @@ namespace Signal.Beacon
                         .AddSignal()
                         .AddPhilipsHue()
                         .AddSamsung();
-                    //.AddVoice();
+                        //.AddVoice();
 
                     services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));
                 });
