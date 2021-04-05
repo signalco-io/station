@@ -12,7 +12,13 @@ Connect to following address:
 
 ### Flow
 
-#### Aquire token
+#### Acquire basic info
+
+```
+GET http://<IP>:8001/api/v2/
+```
+
+#### Acquire token
 
 - Connect to the TV with above WebSocket URL
 - TV will present user with option to allow or deny connection
