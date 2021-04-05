@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Signal.Beacon.Application\Signal.Beacon.Application.csproj" />
     <ProjectReference Include="..\Signal.Beacon.Channel.BroadLink\Signal.Beacon.Channel.BroadLink.csproj" />
+    <ProjectReference Include="..\Signal.Beacon.Channel.Samsung\Signal.Beacon.Channel.Samsung.csproj" />
     <ProjectReference Include="..\Signal.Beacon.Channel.Signal\Signal.Beacon.Channel.Signal.csproj" />
     <ProjectReference Include="..\Signal.Beacon.Channel.Tasmota\Signal.Beacon.Channel.Tasmota.csproj" />
     <ProjectReference Include="..\Signal.Beacon.Configuration\Signal.Beacon.Configuration.csproj" />

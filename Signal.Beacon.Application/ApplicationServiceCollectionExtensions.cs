@@ -48,6 +48,7 @@ namespace Signal.Beacon.Application
 
             // Network
             services.AddTransient<IHostInfoService, HostInfoService>();
+            services.AddTransient<IMacLookupService, MacLookupService>();
 
             return services;
         }

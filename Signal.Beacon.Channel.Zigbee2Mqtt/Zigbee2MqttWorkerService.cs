@@ -118,13 +118,12 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             try
             {
                 var client = this.mqttClientFactory.Create();
-
                 if (string.IsNullOrWhiteSpace(mqttServerConfig.Url))
                 {
                     this.logger.LogWarning("MQTT Server has invalid URL: {Url}", mqttServerConfig.Url);
                     return;
                 }
-
+                
                 await client.StartAsync("Signal.Beacon.Channel.Zigbee2Mqtt", mqttServerConfig.Url, this.startCancellationToken);
                 await client.SubscribeAsync(
                     MqttTopicSubscription,
@@ -186,6 +185,11 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
 
         private async Task HandleDeviceTopicAsync(string topic, string payload, CancellationToken cancellationToken)
         {
+            // Ignore get and set requests for device
+            if (topic.Contains("/set/", StringComparison.InvariantCultureIgnoreCase) ||
+                topic.Contains("/get/", StringComparison.InvariantCultureIgnoreCase))
+                return;
+
             var deviceAlias = topic.Split("/", StringSplitOptions.RemoveEmptyEntries)
                 .Skip(1).Take(1)
                 .FirstOrDefault();
@@ -246,6 +250,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             if (config == null) 
                 return;
 
+            var deviceDiscoveryTasks = new List<Task>();
             foreach (var bridgeDevice in config)
             {
                 try
@@ -257,7 +262,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
                         continue;
                     }
 
-                    await this.DeviceDiscoveredAsync(bridgeDevice, cancellationToken);
+                    deviceDiscoveryTasks.Add(this.DeviceDiscoveredAsync(bridgeDevice, cancellationToken));
                 }
                 catch(Exception ex)
                 {
@@ -265,6 +270,8 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
                     this.logger.LogWarning("Failed to configure device {Name} ({Address})", bridgeDevice.FriendlyName, bridgeDevice.IeeeAddress);
                 }
             }
+
+            await Task.WhenAll(deviceDiscoveryTasks);
         }
         
         private async Task DeviceDiscoveredAsync(BridgeDevice bridgeDevice, CancellationToken cancellationToken)

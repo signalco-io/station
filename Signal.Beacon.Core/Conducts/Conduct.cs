@@ -8,10 +8,13 @@ namespace Signal.Beacon.Core.Conducts
 
         public object Value { get; }
 
-        public Conduct(DeviceTarget target, object value)
+        public double Delay { get; }
+
+        public Conduct(DeviceTarget target, object value, double delay = 0)
         {
             this.Target = target;
             this.Value = value;
+            this.Delay = delay;
         }
     }
 }

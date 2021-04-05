@@ -53,8 +53,12 @@ namespace Signal.Beacon.Application.Conducts
 
         public async Task PublishAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
+            var enumerable = conducts?.ToList() ?? new List<Conduct>();
+            foreach (var conduct in enumerable) 
+                this.logger.LogDebug("Publishing conduct {Target} {Value} (after {Delay}ms)", conduct.Target, conduct.Value, conduct.Delay);
+
             await Task.WhenAll(
-                conducts
+                enumerable
                     .GroupBy(c => c.Target.Channel)
                     .Select(cGroup => this.conductHub.PublishAsync(cGroup.Key, cGroup, cancellationToken)));
 

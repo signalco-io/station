@@ -9,5 +9,7 @@ namespace Signal.Beacon.Core.Network
         long Ping { get; }
 
         IEnumerable<int> OpenPorts { get; }
+
+        string? PhysicalAddress { get; init; }
     }
 }

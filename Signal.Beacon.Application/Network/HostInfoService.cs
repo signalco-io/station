@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Network;
@@ -16,14 +17,26 @@ namespace Signal.Beacon.Application.Network
             int[] scanPorts,
             CancellationToken cancellationToken)
         {
+            var arpResult = await ArpLookupAsync();
             var pingResults = await Task
                 .WhenAll(ipAddresses.Select(address =>
-                    GetHostInformationAsync(address, scanPorts, cancellationToken)))
+                {
+                    var arpLookupResult = arpResult.FirstOrDefault(a => a.ip == address);
+                    return GetHostInformationAsync(
+                        address,
+                        scanPorts,
+                        arpLookupResult.physical,
+                        cancellationToken);
+                }))
                 .ConfigureAwait(false);
             return pingResults.Where(i => i != null).Select(i => i!);
         }
 
-        private static async Task<HostInfo?> GetHostInformationAsync(string address, IEnumerable<int> applicablePorts, CancellationToken cancellationToken)
+        private static async Task<HostInfo?> GetHostInformationAsync(
+            string address, 
+            IEnumerable<int> applicablePorts, 
+            string? arpLookupPhysical,
+            CancellationToken cancellationToken)
         {
             var ping = await PingIpAddressAsync(address, cancellationToken);
             if (ping == null)
@@ -34,8 +47,49 @@ namespace Signal.Beacon.Application.Network
 
             return new HostInfo(address, ping.Value)
             {
-                OpenPorts = openPorts
+                OpenPorts = openPorts,
+                PhysicalAddress = arpLookupPhysical
             };
+        }
+
+        private static async Task<IEnumerable<(string ip, string physical)>> ArpLookupAsync()
+        {
+            try
+            {
+                System.Diagnostics.Process pProcess = new()
+                {
+                    StartInfo =
+                    {
+                        FileName = "arp",
+                        Arguments = "-a ",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    }
+                };
+                pProcess.Start();
+                string cmdOutput = await pProcess.StandardOutput.ReadToEndAsync();
+
+                // Regex supports following outputs:
+                // Windows (10): 192.168.0.1           00-00-00-00-00-00     dynamic
+                // Ubuntu (20):  HOSTNAME (192.168.0.1) at 00:00:00:00:00:00 [ether] on eth0
+                const string pattern = @"\(*(?<ip>([0-9]{1,3}\.?){4})\)*\s*(at)*\s*(?<mac>([a-f0-9]{2}(-|:)?){6})";
+                var pairs = new List<(string ip, string physical)>();
+                foreach (Match m in Regex.Matches(cmdOutput, pattern, RegexOptions.IgnoreCase))
+                {
+                    pairs.Add(
+                        (
+                            m.Groups["ip"].Value,
+                            m.Groups["mac"].Value.Replace("-", ":")
+                        ));
+                }
+
+                return pairs;
+            }
+            catch
+            {
+                return Enumerable.Empty<(string ip, string physical)>();
+            }
         }
 
         private static async Task<long?> PingIpAddressAsync(string address, CancellationToken cancellationToken, int timeout = 1000, int retry = 2)
