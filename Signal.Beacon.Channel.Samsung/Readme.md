@@ -212,3 +212,9 @@ Response:
   "from": "host"
 }
 ```
+
+#### Lunch app
+
+curl -X POST http://TV_IP:8001/ws/apps/Netflix
+
+curl -X POST http://TV_IP:8001/api/v2/applications/Netflix
