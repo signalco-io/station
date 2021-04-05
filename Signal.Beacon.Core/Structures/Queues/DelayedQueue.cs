@@ -27,92 +27,55 @@ namespace Signal.Beacon.Core.Structures.Queues
 
         private class AsyncBlockingQueueEnumerator : IAsyncEnumerator<T>
         {
-            private readonly SortedList<TimeSpan, T?> queue = new();
+            private readonly SortedList<DateTime, T?> queue = new();
 
-            private TimeSpan? nextItemDue;
-            private TaskCompletionSource<T?> nextItemDelayTask = new();
-            private CancellationTokenSource? delayTaskCancellationTokenSource;
+            private TaskCompletionSource nextItemDelayTask = new();
             private readonly object queueLock = new();
-
-            private void SetDelay()
-            {
-                if (this.queue.Count > 0)
-                {
-                    var next = this.queue.FirstOrDefault();
-
-                    // Check if new item needs due reduced
-                    if (this.nextItemDue != null && !(next.Key < this.nextItemDue)) return;
-
-                    // Set new delay
-                    this.delayTaskCancellationTokenSource?.Cancel();
-                    this.delayTaskCancellationTokenSource = new CancellationTokenSource();
-
-                    var previousTask = this.nextItemDelayTask;
-                    this.nextItemDelayTask = new TaskCompletionSource<T?>();
-                    this.nextItemDue = next.Key;
-                    if (!previousTask.Task.IsCompleted)
-                        previousTask.SetCanceled();
-
-                    var token = this.delayTaskCancellationTokenSource.Token;
-                    Task.Delay(next.Key)
-                        .ContinueWith(_ => { this.Dequeue(next, token); });
-                }
-                else
-                {
-                    this.nextItemDelayTask = new TaskCompletionSource<T?>();
-                }
-            }
-
+            
             public void Enqueue(T item, TimeSpan due)
             {
                 lock (this.queueLock)
                 {
-                    this.queue.Add(due, item);
-                    this.SetDelay();
+                    this.queue.Add(DateTime.UtcNow + due, item);
                 }
             }
-
-            private void Dequeue(KeyValuePair<TimeSpan, T?> item, CancellationToken cancellationToken)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    return;
-
-                lock (this.queueLock)
-                {
-                    this.queue.RemoveAt(0);
-                    this.nextItemDelayTask.SetResult(item.Value);
-                    this.nextItemDue = null;
-                    this.SetDelay();
-                }
-            }
-
+            
             public ValueTask DisposeAsync()
             {
-                lock (this.queueLock)
-                {
-                    if (!this.nextItemDelayTask.Task.IsCompleted)
-                        this.nextItemDelayTask.SetCanceled();
-                    this.delayTaskCancellationTokenSource?.Cancel();
-                }
+                if (!this.nextItemDelayTask.Task.IsCompleted)
+                    this.nextItemDelayTask.SetCanceled();
 
                 return ValueTask.CompletedTask;
             }
 
             public async ValueTask<bool> MoveNextAsync()
             {
-                var task = this.nextItemDelayTask.Task;
-                while (true)
+                this.nextItemDelayTask = new TaskCompletionSource();
+
+                _ = Task.Run(() =>
                 {
-                    try
+                    while (!this.nextItemDelayTask.Task.IsCanceled)
                     {
-                        this.Current = await task;
-                        return true;
+                        lock (this.queueLock)
+                        {
+                            var (timeStamp, value) = this.queue.FirstOrDefault();
+                            if (timeStamp == default || timeStamp > DateTime.UtcNow)
+                            {
+                                Thread.Sleep(10);
+                                continue;
+                            }
+
+                            this.queue.RemoveAt(0);
+                            this.Current = value;
+                        }
+
+                        this.nextItemDelayTask.SetResult();
+                        break;
                     }
-                    catch (TaskCanceledException)
-                    {
-                        task = this.nextItemDelayTask.Task;
-                    }
-                }
+                });
+
+                await this.nextItemDelayTask.Task;
+                return true;
             }
 
             public T? Current { get; private set; }
