@@ -27,7 +27,7 @@ namespace Signal.Beacon.Voice
 
         private Porcupine? porcupine;
         private short[]? porcupineRecordingBuffer;
-        private const float PorcupineSensitivity = 0.7f;
+        private const float PorcupineSensitivity = 1f;
         private const string PorcupineModelFilePath = @"lib\common\porcupine_params.pv";
 
         private readonly List<SpeechScene> speechScenes = new();
@@ -82,8 +82,7 @@ namespace Signal.Beacon.Voice
             {
                 if (this.GetNextFrame(this.porcupine.FrameLength, ref this.porcupineRecordingBuffer))
                 {
-                    var result = this.porcupine.Process(this.porcupineRecordingBuffer);
-                    if (result >= 0)
+                    if (this.porcupine.Process(this.porcupineRecordingBuffer) >= 0)
                         return;
                 }
 
@@ -186,6 +185,12 @@ namespace Signal.Beacon.Voice
                 return false;
 
             ALC.CaptureSamples(this.captureDevice.Value, ref buffer[0], frameLength);
+
+            for (var i = 0; i < buffer.Length; i++)
+            {
+                buffer[i] = (short)Math.Min(short.MaxValue, Math.Max(short.MinValue, buffer[i] * 10));
+            }
+
             return true;
         }
         
@@ -262,7 +267,8 @@ namespace Signal.Beacon.Voice
 
                     await this.PlaySoundAsync("Hello.");
 
-                    var captureDeviceName = this.GetAvailableCaptureDevices().FirstOrDefault();
+                    var captureDeviceNames = this.GetAvailableCaptureDevices();
+                    var captureDeviceName = captureDeviceNames.OrderByDescending(d => d.Contains("BT", StringComparison.InvariantCultureIgnoreCase)).FirstOrDefault();
                     if (captureDeviceName == null)
                         throw new Exception("No capture devices available");
 
@@ -431,7 +437,7 @@ namespace Signal.Beacon.Voice
             }
             catch (Exception ex)
             {
-                this.logger.LogError(ex, "Failed to play sound.");
+                this.logger.LogWarning(ex, "Failed to play sound.");
             }
         }
 
