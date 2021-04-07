@@ -1,6 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -64,7 +69,7 @@ namespace Signal.Beacon.Channel.Samsung
         private Task SamsungConductHandler(Conduct conduct, CancellationToken cancellationToken)
         {
             var remoteId = conduct.Target.Identifier.Replace("samsung-remote/", "");
-            var matchedRemote = this.tvRemotes.FirstOrDefault();
+            var matchedRemote = this.tvRemotes.FirstOrDefault(r => r.Id == remoteId);
             if (matchedRemote == null)
                 throw new Exception($"No matching remote found for target {conduct.Target.Identifier}");
 
@@ -72,6 +77,15 @@ namespace Signal.Beacon.Channel.Samsung
             {
                 matchedRemote.KeyPress(conduct.Value.ToString() ??
                                        throw new ArgumentException($"Invalid conduct value ${conduct.Value}"));
+            } else if (conduct.Target.Contact == "state")
+            {
+                if (conduct.Value is not bool boolValue)
+                    throw new Exception("Invalid contact value type. Expected boolean.");
+
+                // To turn on use WOL, to turn off use power key
+                if (boolValue)
+                    matchedRemote.WakeOnLan();
+                else matchedRemote.KeyPress("KEY_POWER");
             }
             else throw new ArgumentOutOfRangeException($"Unsupported contact {conduct.Target.Contact}");
 
@@ -107,7 +121,10 @@ namespace Signal.Beacon.Channel.Samsung
                     hostInfo.IpAddress);
 
                 // Try to connect
-                var newTvRemoteConfig = new SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig(hostInfo.IpAddress);
+                var newTvRemoteConfig = new SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig(hostInfo.IpAddress)
+                {
+                    MacAddress = hostInfo.PhysicalAddress
+                };
                 this.configuration?.TvRemotes.Add(newTvRemoteConfig);
                 this.ConnectTvAsync(newTvRemoteConfig, cancellationToken);
             }
@@ -125,7 +142,7 @@ namespace Signal.Beacon.Channel.Samsung
             await this.configurationService.SaveAsync(ConfigurationFileName, this.configuration, cancellationToken);
         }
 
-        private class TvRemote
+        private class TvRemote : IDisposable
         {
             public string? Id => this.configuration.Id;
 
@@ -156,12 +173,73 @@ namespace Signal.Beacon.Channel.Samsung
                 this.client.Send(command);
             }
 
+            public void WakeOnLan()
+            {
+                if (string.IsNullOrWhiteSpace(this.configuration.MacAddress) ||
+                    string.IsNullOrWhiteSpace(this.configuration.IpAddress))
+                    throw new Exception("MAC and IP address are required for WOL");
+
+                SendWakeOnLan(
+                    PhysicalAddress.Parse(this.configuration.MacAddress),
+                    IPAddress.Parse(this.configuration.IpAddress));
+            }
+
+            private static void SendWakeOnLan(PhysicalAddress target, IPAddress address)
+            {
+                var header = Enumerable.Repeat(byte.MaxValue, 6);
+                var data = Enumerable.Repeat(target.GetAddressBytes(), 16).SelectMany(mac => mac);
+                var magicPacket = header.Concat(data).ToArray();
+
+                using var udpClient = new UdpClient();
+                udpClient.Send(magicPacket, magicPacket.Length, new IPEndPoint(address, 0x2fff));
+            }
+
             public async void ConnectTvAsync(CancellationToken cancellationToken)
             {
-                this.cancellationToken = cancellationToken;
-                var token = this.configuration.Token;
-                this.client = await this.ConnectWsEndpointAsync(this.configuration.IpAddress, 8002, "/channels/samsung.remote.control", "Signal", token);
-                this.client.MessageReceived.Subscribe(this.HandleTvRemoteMessage);
+                try
+                {
+                    // Retrieve basic info
+                    var tvBasicInfo =
+                        await new HttpClient().GetFromJsonAsync<TvBasicInfoApiV2ResponseDto>(
+                            $"http://{this.configuration.IpAddress}:8001/api/v2/", cancellationToken);
+                    if (tvBasicInfo != null)
+                        this.configuration.Id = tvBasicInfo.Device.Id;
+
+                    this.cancellationToken = cancellationToken;
+                    var token = this.configuration.Token;
+                    this.client = await this.ConnectWsEndpointAsync(this.configuration.IpAddress, 8002,
+                        "/channels/samsung.remote.control", "Signal", token);
+                    this.client.MessageReceived.Subscribe(this.HandleTvRemoteMessage);
+                }
+                catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestTimeout)
+                {
+                    this.logger.LogDebug("TV Offline {TvIp}", this.configuration.IpAddress);
+                    this.ReconnectAfter();
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogWarning(ex, "Failed to connect to TV {TvIp}", this.configuration.IpAddress);
+
+                    this.ReconnectAfter();
+                }
+            }
+
+            private void ReconnectAfter(double delayMs = 30000)
+            {
+                Task.Delay(TimeSpan.FromMilliseconds(delayMs), this.cancellationToken)
+                    .ContinueWith(_ => this.ConnectTvAsync(this.cancellationToken), this.cancellationToken);
+            }
+
+            private void Disconnect()
+            {
+                try
+                {
+                    this.client?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogWarning(ex, "Failed to dispose the TV connection {TvIp}", this.configuration.IpAddress);
+                }
             }
 
             private void HandleTvRemoteMessage(ResponseMessage message)
@@ -204,13 +282,35 @@ namespace Signal.Beacon.Channel.Samsung
                 client.ReconnectionHappened.Subscribe(info =>
                     this.logger.LogDebug($"Reconnection happened, type: {info.Type}"));
                 client.DisconnectionHappened.Subscribe(info =>
-                    this.logger.LogWarning($"DisconnectionHappened, type: {info.Type}"));
+                {
+                    this.logger.LogWarning($"DisconnectionHappened, type: {info.Type}");
+                    this.ReconnectAfter();
+                });
                 client.MessageReceived.Subscribe(msg =>
                     this.logger.LogDebug($"Message received: {msg}"));
 
                 await client.Start();
 
                 return client;
+            }
+
+            private class TvBasicInfoApiV2ResponseDto
+            {
+                public DeviceDto Device { get; set; }
+
+                public class DeviceDto
+                {
+                    public string Id { get; set; }
+
+                    public string Name { get; set; }
+
+                    public string WifiMac { get; set; }
+                }
+            }
+
+            public void Dispose()
+            {
+                this.Disconnect();
             }
         }
     }

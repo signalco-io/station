@@ -31,8 +31,8 @@ namespace Signal.Beacon
                         .AddTasmota()
                         .AddSignal()
                         .AddPhilipsHue()
-                        .AddSamsung()
-                        .AddVoice();
+                        .AddSamsung();
+                        //.AddVoice();
 
                     services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));
                 });

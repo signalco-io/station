@@ -19,6 +19,8 @@ namespace Signal.Beacon.Channel.Samsung
             public string? Id { get; set; }
 
             public string? Token { get; set; }
+
+            public string? MacAddress { get; set; }
         }
     }
 }
