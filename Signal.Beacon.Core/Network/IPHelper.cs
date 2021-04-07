@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
 namespace Signal.Beacon.Core.Network
 {
-    // ReSharper disable once InconsistentNaming
-    public static class IPHelper
+    public static class IpHelper
     {
         private const string FallbackLocalIpAddress = "127.0.0.1";
 
@@ -33,6 +33,16 @@ namespace Signal.Beacon.Core.Network
 
             var localIpPrefix = ipAddress.Substring(0, ipAddress.LastIndexOf('.') + 1);
             return Enumerable.Range(0, 256).Select(i => $"{localIpPrefix}{i}");
+        }
+
+        public static void SendWakeOnLan(PhysicalAddress target, IPAddress address, int port = 0x2fff)
+        {
+            var header = Enumerable.Repeat(byte.MaxValue, 6);
+            var data = Enumerable.Repeat(target.GetAddressBytes(), 16).SelectMany(mac => mac);
+            var magicPacket = header.Concat(data).ToArray();
+
+            using var udpClient = new UdpClient();
+            udpClient.Send(magicPacket, magicPacket.Length, new IPEndPoint(address, port));
         }
     }
 }

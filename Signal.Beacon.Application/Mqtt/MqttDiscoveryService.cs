@@ -34,7 +34,7 @@ namespace Signal.Beacon.Application.Mqtt
 
             try
             {
-                var ipAddressesInRange = IPHelper.GetIPAddressesInRange(IPHelper.GetLocalIp());
+                var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
                 var applicableHosts =
                     await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {1883}, cancellationToken);
 

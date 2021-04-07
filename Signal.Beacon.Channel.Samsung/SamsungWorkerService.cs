@@ -94,7 +94,7 @@ namespace Signal.Beacon.Channel.Samsung
 
         private async Task DiscoverDevices(CancellationToken cancellationToken)
         {
-            var ipAddressesInRange = IPHelper.GetIPAddressesInRange(IPHelper.GetLocalIp());
+            var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
             var matchedHosts =
                 await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, cancellationToken);
             var hostsWithPort = matchedHosts.Where(mh => mh.OpenPorts.Count() == 1);
@@ -179,19 +179,9 @@ namespace Signal.Beacon.Channel.Samsung
                     string.IsNullOrWhiteSpace(this.configuration.IpAddress))
                     throw new Exception("MAC and IP address are required for WOL");
 
-                SendWakeOnLan(
+                IpHelper.SendWakeOnLan(
                     PhysicalAddress.Parse(this.configuration.MacAddress),
                     IPAddress.Parse(this.configuration.IpAddress));
-            }
-
-            private static void SendWakeOnLan(PhysicalAddress target, IPAddress address)
-            {
-                var header = Enumerable.Repeat(byte.MaxValue, 6);
-                var data = Enumerable.Repeat(target.GetAddressBytes(), 16).SelectMany(mac => mac);
-                var magicPacket = header.Concat(data).ToArray();
-
-                using var udpClient = new UdpClient();
-                udpClient.Send(magicPacket, magicPacket.Length, new IPEndPoint(address, 0x2fff));
             }
 
             public async void ConnectTvAsync(CancellationToken cancellationToken)
