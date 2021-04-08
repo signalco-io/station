@@ -22,6 +22,7 @@ namespace Signal.Beacon.Application.Processing
         private readonly ILogger<Processor> logger;
 
         private readonly IDelayedQueue<Conduct> delayedConducts = new DelayedQueue<Conduct>();
+        private readonly IDelayedQueue<StateTriggerProcess> delayedTriggers = new DelayedQueue<StateTriggerProcess>();
 
 
         public Processor(
@@ -44,6 +45,7 @@ namespace Signal.Beacon.Application.Processing
             // Subscribe to state changes
             this.deviceStateManager.Subscribe(this.ProcessStateChangedAsync);
             _ = Task.Run(() => this.DelayedConductsLoop(cancellationToken), cancellationToken);
+            _ = Task.Run(() => this.DelayedTriggersLoop(cancellationToken), cancellationToken);
 
             return Task.CompletedTask;
         }
@@ -52,6 +54,12 @@ namespace Signal.Beacon.Application.Processing
         {
             await foreach (var conduct in this.delayedConducts.WithCancellation(cancellationToken)) 
                 await this.conductManager.PublishAsync(new[] {conduct}, cancellationToken);
+        }
+
+        private async Task DelayedTriggersLoop(CancellationToken cancellationToken)
+        {
+            await foreach (var process in this.delayedTriggers.WithCancellation(cancellationToken))
+                await this.EvaluateAndExecute(new[] { process }, cancellationToken);
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
@@ -71,8 +79,21 @@ namespace Signal.Beacon.Application.Processing
                 return;
             }
 
-            // Collect all process conducts that meet conditions
+            // Queue delayed triggers
+            foreach (var delayedStateTriggerProcess in applicableProcesses.Where(p => p.Delay > 0))
+                this.delayedTriggers.Enqueue(
+                    delayedStateTriggerProcess,
+                    TimeSpan.FromMilliseconds(delayedStateTriggerProcess.Delay));
+            
+            // Trigger no-delay processes immediately
+            await this.EvaluateAndExecute(applicableProcesses.Where(p => p.Delay <= 0), cancellationToken);
+        }
+
+        private async Task EvaluateAndExecute(IEnumerable<StateTriggerProcess> applicableProcesses, CancellationToken cancellationToken)
+        {
             var conducts = new List<Conduct>();
+
+            // Collect all process conducts that meet conditions
             foreach (var process in applicableProcesses)
             {
                 try
@@ -83,13 +104,15 @@ namespace Signal.Beacon.Application.Processing
 
                     // Queue conducts
                     this.logger.LogInformation(
-                        "Process \"{ProcessName}\" queued... (trigger {Target})",
-                        process.Alias, target);
+                        "Process \"{ProcessName}\" queued...",
+                        process.Alias);
                     conducts.AddRange(process.Conducts);
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogWarning(ex, "StateTriggerProcess condition invalid. Recheck your configuration. ProcessName: {ProcessName}", process.Alias);
+                    this.logger.LogWarning(ex,
+                        "StateTriggerProcess condition invalid. Recheck your configuration. ProcessName: {ProcessName}",
+                        process.Alias);
                 }
             }
 

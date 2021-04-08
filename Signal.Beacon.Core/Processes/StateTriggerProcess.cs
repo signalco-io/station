@@ -11,6 +11,8 @@ namespace Signal.Beacon.Core.Processes
 
         public bool IsDisabled { get; set; }
 
+        public double Delay { get; set; }
+
         public IEnumerable<DeviceTarget> Triggers { get; set; }
 
         public Condition Condition { get; set; }

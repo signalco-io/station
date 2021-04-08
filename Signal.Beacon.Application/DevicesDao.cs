@@ -116,8 +116,8 @@ namespace Signal.Beacon.Application
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Failed to cache devices.");
-                throw;
+                this.logger.LogDebug(ex, "Cache devices from SignalAPI failed.");
+                this.logger.LogWarning( "Failed to load devices from Signal.");
             }
         }
     }

@@ -201,7 +201,8 @@ namespace Signal.Beacon.Channel.Samsung
                         "/channels/samsung.remote.control", "Signal", token);
                     this.client.MessageReceived.Subscribe(this.HandleTvRemoteMessage);
                 }
-                catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestTimeout)
+                catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestTimeout ||
+                                                      ex.InnerException is SocketException {SocketErrorCode: SocketError.TimedOut})
                 {
                     this.logger.LogDebug("TV Offline {TvIp}", this.configuration.IpAddress);
                     this.ReconnectAfter();

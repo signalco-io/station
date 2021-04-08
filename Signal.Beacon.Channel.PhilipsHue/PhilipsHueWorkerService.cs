@@ -93,7 +93,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
                     }
                     catch (Exception ex)
                     {
-                        this.logger.LogWarning(ex, "Failed to refresh devices state.");
+                        this.logger.LogWarning("Failed to refresh devices state. Reason: {Reason}", ex.Message);
                     }
                 }
 
