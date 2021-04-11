@@ -4,5 +4,6 @@
         string DeviceId,
         string ChannelName,
         string ContactName,
-        string ValueSerialized);
+        string ValueSerialized,
+        double? Delay);
 }

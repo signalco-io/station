@@ -8,6 +8,7 @@ using Signal.Beacon.Application.PubSub;
 using Signal.Beacon.Application.Signal.SignalR;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Structures.Queues;
 
 namespace Signal.Beacon.Application.Conducts
 {
@@ -16,6 +17,7 @@ namespace Signal.Beacon.Application.Conducts
         private readonly IPubSubTopicHub<Conduct> conductHub;
         private readonly ISignalSignalRConductsHubClient signalRConductsHubClient;
         private readonly IDevicesDao devicesDao;
+        private readonly IDelayedQueue<ConductRequestDto> delayedConducts = new DelayedQueue<ConductRequestDto>();
         private readonly ILogger<ConductManager> logger;
 
 
@@ -31,21 +33,43 @@ namespace Signal.Beacon.Application.Conducts
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        private async Task ConductRequestedHandlerAsync(ConductRequestDto request, CancellationToken cancellationToken)
+        private async Task ConductRequestedHandlerAsync(ConductRequestDto request, bool ignoreDelay, CancellationToken cancellationToken)
         {
             var device = await this.devicesDao.GetByIdAsync(request.DeviceId, cancellationToken);
             if (device != null)
-                await this.PublishAsync(new[]
+            {
+                // Publish right away if no delay or ignored
+                if (ignoreDelay || request.Delay <= 0)
                 {
-                    new Conduct(
-                        new DeviceTarget(request.ChannelName, device.Identifier, request.ContactName),
-                        request.ValueSerialized)
-                }, cancellationToken);
+                    await this.PublishAsync(new[]
+                    {
+                        new Conduct(
+                            new DeviceTarget(request.ChannelName, device.Identifier, request.ContactName),
+                            request.ValueSerialized,
+                            request.Delay ?? 0)
+                    }, cancellationToken);
+                }
+                else
+                {
+                    this.delayedConducts.Enqueue(request, TimeSpan.FromMilliseconds(request.Delay ?? 0));
+                }
+            }
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            await this.signalRConductsHubClient.OnConductRequestAsync(this.ConductRequestedHandlerAsync, cancellationToken);
+            await this.signalRConductsHubClient.OnConductRequestAsync(
+                (req, conductCancellationToken) =>
+                    this.ConductRequestedHandlerAsync(req, false, conductCancellationToken),
+                cancellationToken);
+
+            _ = Task.Run(() => this.DelayedConductsLoop(cancellationToken), cancellationToken);
+        }
+
+        private async Task DelayedConductsLoop(CancellationToken cancellationToken)
+        {
+            await foreach (var conduct in this.delayedConducts.WithCancellation(cancellationToken))
+                await this.ConductRequestedHandlerAsync(conduct, true, cancellationToken);
         }
 
         public IDisposable Subscribe(string channel, Func<Conduct, CancellationToken, Task> handler) =>

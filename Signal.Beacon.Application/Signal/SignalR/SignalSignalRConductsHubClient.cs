@@ -33,11 +33,12 @@ namespace Signal.Beacon.Application.Signal.SignalR
                     return;
                 }
 
-                this.logger.LogInformation("Conduct requested: {DeviceId} {ChannelName} {ContactName} {ValueSerialized}",
+                this.logger.LogInformation("Conduct requested: {DeviceId} {ChannelName} {ContactName} {ValueSerialized} {Delay}",
                     request.DeviceId,
                     request.ChannelName,
                     request.ContactName,
-                    request.ValueSerialized);
+                    request.ValueSerialized,
+                    request.Delay);
 
                 if (this.StartCancellationToken == null ||
                     this.StartCancellationToken.Value.IsCancellationRequested)
