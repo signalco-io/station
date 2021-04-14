@@ -61,7 +61,7 @@ namespace Signal.Beacon.Channel.Samsung
 
             if (!this.configuration.TvRemotes.Any())
                 _ = this.DiscoverDevices(cancellationToken);
-            else this.configuration.TvRemotes.ForEach(config => this.ConnectTvAsync(config, cancellationToken));
+            else this.configuration.TvRemotes.ForEach(this.ConnectTv);
 
             this.conductSubscriberClient.Subscribe(SamsungChannels.SamsungChannel, this.SamsungConductHandler);
         }
@@ -126,14 +126,14 @@ namespace Signal.Beacon.Channel.Samsung
                     MacAddress = hostInfo.PhysicalAddress
                 };
                 this.configuration?.TvRemotes.Add(newTvRemoteConfig);
-                this.ConnectTvAsync(newTvRemoteConfig, cancellationToken);
+                this.ConnectTv(newTvRemoteConfig);
             }
         }
 
-        private void ConnectTvAsync(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration, CancellationToken cancellationToken)
+        private void ConnectTv(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig remoteConfig)
         {
-            var remote = new TvRemote(configuration, this.logger);
-            remote.ConnectTvAsync(cancellationToken);
+            var remote = new TvRemote(remoteConfig, this.logger);
+            remote.BeginConnectTv();
             this.tvRemotes.Add(remote);
         }
 
@@ -149,7 +149,6 @@ namespace Signal.Beacon.Channel.Samsung
             private readonly SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration;
             private readonly ILogger logger;
             private IWebsocketClient? client;
-            private CancellationToken cancellationToken;
 
 
             public TvRemote(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration, ILogger logger)
@@ -184,22 +183,13 @@ namespace Signal.Beacon.Channel.Samsung
                     IPAddress.Parse(this.configuration.IpAddress));
             }
 
-            public async void ConnectTvAsync(CancellationToken cancellationToken)
+            public async void BeginConnectTv()
             {
                 try
                 {
-                    // Retrieve basic info
-                    var tvBasicInfo =
-                        await new HttpClient().GetFromJsonAsync<TvBasicInfoApiV2ResponseDto>(
-                            $"http://{this.configuration.IpAddress}:8001/api/v2/", cancellationToken);
-                    if (tvBasicInfo != null)
-                        this.configuration.Id = tvBasicInfo.Device.Id;
-
-                    this.cancellationToken = cancellationToken;
-                    var token = this.configuration.Token;
-                    this.client = await this.ConnectWsEndpointAsync(this.configuration.IpAddress, 8002,
-                        "/channels/samsung.remote.control", "Signal", token);
-                    this.client.MessageReceived.Subscribe(this.HandleTvRemoteMessage);
+                    this.Disconnect();
+                    await this.GetBasicInfoAsync();
+                    await this.ConnectWsRemoteAsync();
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestTimeout ||
                                                       ex.InnerException is SocketException {SocketErrorCode: SocketError.TimedOut})
@@ -210,15 +200,29 @@ namespace Signal.Beacon.Channel.Samsung
                 catch (Exception ex)
                 {
                     this.logger.LogWarning(ex, "Failed to connect to TV {TvIp}", this.configuration.IpAddress);
-
                     this.ReconnectAfter();
                 }
             }
 
+            private async Task ConnectWsRemoteAsync()
+            {
+                this.client = await this.ConnectWsEndpointAsync(this.configuration.IpAddress, 8002,
+                    "/channels/samsung.remote.control", "Signal", this.configuration.Token);
+                this.client.MessageReceived.Subscribe(this.HandleTvRemoteMessage);
+            }
+
+            private async Task GetBasicInfoAsync()
+            {
+                var tvBasicInfo = await new HttpClient().GetFromJsonAsync<TvBasicInfoApiV2ResponseDto>(
+                    $"http://{this.configuration.IpAddress}:8001/api/v2/");
+                if (tvBasicInfo != null)
+                    this.configuration.Id = tvBasicInfo.Device.Id;
+            }
+
             private void ReconnectAfter(double delayMs = 30000)
             {
-                Task.Delay(TimeSpan.FromMilliseconds(delayMs), this.cancellationToken)
-                    .ContinueWith(_ => this.ConnectTvAsync(this.cancellationToken), this.cancellationToken);
+                Task.Delay(TimeSpan.FromMilliseconds(delayMs))
+                    .ContinueWith(_ => this.BeginConnectTv());
             }
 
             private void Disconnect()
@@ -240,7 +244,7 @@ namespace Signal.Beacon.Channel.Samsung
                 // Acquire token procedure
                 if (response?.data?.token != null)
                 {
-                    var token = response?.data?.token?.ToString();
+                    var token = response.data.token.ToString();
                     if (string.IsNullOrWhiteSpace(token)) return;
 
                     // Persist acquired token
@@ -249,7 +253,7 @@ namespace Signal.Beacon.Channel.Samsung
 
                     // Reconnect using token
                     this.client?.Dispose();
-                    this.ConnectTvAsync(this.cancellationToken);
+                    this.BeginConnectTv();
                 }
             }
 
@@ -262,7 +266,7 @@ namespace Signal.Beacon.Channel.Samsung
                     urlFormat += "&token=" + token;
                 }
 
-                var client = new WebsocketClient(
+                var wsClient = new WebsocketClient(
                     new Uri(string.Format(urlFormat, ipAddress, port, url, Convert.ToBase64String(Encoding.UTF8.GetBytes(name)))),
                     () => new ClientWebSocket { Options = { RemoteCertificateValidationCallback = (_, _, _, _) => true } })
                 {
@@ -270,33 +274,27 @@ namespace Signal.Beacon.Channel.Samsung
                     IsReconnectionEnabled = false
                 };
 
-                client.ReconnectionHappened.Subscribe(info =>
-                    this.logger.LogDebug($"Reconnection happened, type: {info.Type}"));
-                client.DisconnectionHappened.Subscribe(info =>
+                wsClient.ReconnectionHappened.Subscribe(info =>
+                    this.logger.LogDebug("Reconnection happened {TvIp}, type: {Type}", this.configuration.IpAddress, info.Type));
+                wsClient.DisconnectionHappened.Subscribe(info =>
                 {
-                    this.logger.LogWarning($"DisconnectionHappened, type: {info.Type}");
+                    this.logger.LogWarning("DisconnectionHappened {TvIp}, type: {Type}", this.configuration.IpAddress, info.Type);
                     this.ReconnectAfter();
                 });
-                client.MessageReceived.Subscribe(msg =>
-                    this.logger.LogDebug($"Message received: {msg}"));
+                wsClient.MessageReceived.Subscribe(msg =>
+                    this.logger.LogTrace("Message received from {TvIp}: {Message}", this.configuration.IpAddress, msg.Text));
 
-                await client.Start();
+                await wsClient.Start();
 
-                return client;
+                return wsClient;
             }
 
+            [Serializable]
             private class TvBasicInfoApiV2ResponseDto
             {
-                public DeviceDto Device { get; set; }
+                public DeviceDto? Device { get; set; }
 
-                public class DeviceDto
-                {
-                    public string Id { get; set; }
-
-                    public string Name { get; set; }
-
-                    public string WifiMac { get; set; }
-                }
+                public record DeviceDto(string? Id);
             }
 
             public void Dispose()

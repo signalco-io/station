@@ -54,7 +54,6 @@ namespace Signal.Beacon.Application.Mqtt
                             applicableHost.IpAddress,
                             cancellationToken);
 
-
                         // Subscribe to expected topic
                         var didReceiveExpectedTopisMessageTask = new TaskCompletionSource();
                         await client.SubscribeAsync(expectedTopic, _ =>
@@ -66,7 +65,6 @@ namespace Signal.Beacon.Application.Mqtt
                             didReceiveExpectedTopisMessageTask.SetResult();
                             return Task.CompletedTask;
                         });
-
 
                         // Wait for topic message or timeout
                         await Task.WhenAny(
