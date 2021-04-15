@@ -17,7 +17,7 @@ namespace Signal.Beacon.Application.Conducts
         private readonly IPubSubTopicHub<Conduct> conductHub;
         private readonly ISignalSignalRConductsHubClient signalRConductsHubClient;
         private readonly IDevicesDao devicesDao;
-        private readonly IDelayedQueue<ConductRequestDto> delayedConducts = new DelayedQueue<ConductRequestDto>();
+        private readonly IDelayedQueue<Conduct> delayedConducts = new DelayedQueue<Conduct>();
         private readonly ILogger<ConductManager> logger;
 
 
@@ -33,43 +33,38 @@ namespace Signal.Beacon.Application.Conducts
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        private async Task ConductRequestedHandlerAsync(ConductRequestDto request, bool ignoreDelay, CancellationToken cancellationToken)
-        {
-            var device = await this.devicesDao.GetByIdAsync(request.DeviceId, cancellationToken);
-            if (device != null)
-            {
-                // Publish right away if no delay or ignored
-                if (ignoreDelay || request.Delay <= 0)
-                {
-                    await this.PublishAsync(new[]
-                    {
-                        new Conduct(
-                            new DeviceTarget(request.ChannelName, device.Identifier, request.ContactName),
-                            request.ValueSerialized,
-                            request.Delay ?? 0)
-                    }, cancellationToken);
-                }
-                else
-                {
-                    this.delayedConducts.Enqueue(request, TimeSpan.FromMilliseconds(request.Delay ?? 0));
-                }
-            }
-        }
-
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             await this.signalRConductsHubClient.OnConductRequestAsync(
-                (req, conductCancellationToken) =>
-                    this.ConductRequestedHandlerAsync(req, false, conductCancellationToken),
+                this.ConductRequestedHandlerAsync,
                 cancellationToken);
 
             _ = Task.Run(() => this.DelayedConductsLoop(cancellationToken), cancellationToken);
         }
 
+        private async Task ConductRequestedHandlerAsync(ConductRequestDto request, CancellationToken cancellationToken)
+        {
+            var device = await this.devicesDao.GetByIdAsync(request.DeviceId, cancellationToken);
+            if (device == null)
+            {
+                this.logger.LogTrace("Conduct ignored. Device {DeviceId} unknown.", request.DeviceId);
+                return;
+            }
+
+            // Publish right away if no delay or ignored
+            await this.PublishAsync(new[]
+            {
+                new Conduct(
+                    new DeviceTarget(request.ChannelName, device.Identifier, request.ContactName),
+                    request.ValueSerialized,
+                    request.Delay ?? 0)
+            }, cancellationToken);
+        }
+
         private async Task DelayedConductsLoop(CancellationToken cancellationToken)
         {
             await foreach (var conduct in this.delayedConducts.WithCancellation(cancellationToken))
-                await this.ConductRequestedHandlerAsync(conduct, true, cancellationToken);
+                await this.PublishInternalAsync(new[] {conduct}, cancellationToken);
         }
 
         public IDisposable Subscribe(string channel, Func<Conduct, CancellationToken, Task> handler) =>
@@ -77,16 +72,38 @@ namespace Signal.Beacon.Application.Conducts
 
         public async Task PublishAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            var enumerable = conducts?.ToList() ?? new List<Conduct>();
-            foreach (var conduct in enumerable) 
-                this.logger.LogDebug("Publishing conduct {Target} {Value} (after {Delay}ms)", conduct.Target, conduct.Value, conduct.Delay);
+            var conductsList = conducts as IList<Conduct> ?? conducts.ToList();
+            
+            // Enqueue delayed
+            this.delayedConducts.Enqueue(
+                conductsList.Where(c => c.Delay > 0),
+                c => TimeSpan.FromMilliseconds(c.Delay));
 
-            await Task.WhenAll(
-                enumerable
-                    .GroupBy(c => c.Target.Channel)
-                    .Select(cGroup => this.conductHub.PublishAsync(cGroup.Key, cGroup, cancellationToken)));
+            // Publish non-delayed conducts
+            await this.PublishInternalAsync(conductsList.Where(c => c.Delay <= 0), cancellationToken);
+        }
 
-            // TODO: Publish to SignalR if no local handler successfully handled the conduct
+        private async Task PublishInternalAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var enumerable = conducts?.ToList() ?? new List<Conduct>();
+                foreach (var conduct in enumerable)
+                    this.logger.LogDebug("Publishing conduct {Target} {Value} (after {Delay}ms)", conduct.Target,
+                        conduct.Value, conduct.Delay);
+
+                await Task.WhenAll(
+                    enumerable
+                        .GroupBy(c => c.Target.Channel)
+                        .Select(cGroup => this.conductHub.PublishAsync(cGroup.Key, cGroup, cancellationToken)));
+
+                // TODO: Publish to SignalR if no local handler successfully handled the conduct
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogDebug(ex, "Unhandled conducts publish exception.");
+                this.logger.LogWarning("Publishing conducts failed.");
+            }
         }
     }
 }

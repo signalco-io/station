@@ -221,6 +221,7 @@ namespace Signal.Beacon.Channel.Samsung
 
             private void ReconnectAfter(double delayMs = 30000)
             {
+                this.Disconnect();
                 Task.Delay(TimeSpan.FromMilliseconds(delayMs))
                     .ContinueWith(_ => this.BeginConnectTv());
             }

@@ -21,7 +21,6 @@ namespace Signal.Beacon.Application.Processing
         private readonly IConductManager conductManager;
         private readonly ILogger<Processor> logger;
 
-        private readonly IDelayedQueue<Conduct> delayedConducts = new DelayedQueue<Conduct>();
         private readonly IDelayedQueue<StateTriggerProcess> delayedTriggers = new DelayedQueue<StateTriggerProcess>();
 
 
@@ -44,16 +43,9 @@ namespace Signal.Beacon.Application.Processing
         {
             // Subscribe to state changes
             this.deviceStateManager.Subscribe(this.ProcessStateChangedAsync);
-            _ = Task.Run(() => this.DelayedConductsLoop(cancellationToken), cancellationToken);
             _ = Task.Run(() => this.DelayedTriggersLoop(cancellationToken), cancellationToken);
 
             return Task.CompletedTask;
-        }
-
-        private async Task DelayedConductsLoop(CancellationToken cancellationToken)
-        {
-            await foreach (var conduct in this.delayedConducts.WithCancellation(cancellationToken)) 
-                await this.conductManager.PublishAsync(new[] {conduct}, cancellationToken);
         }
 
         private async Task DelayedTriggersLoop(CancellationToken cancellationToken)
@@ -117,11 +109,7 @@ namespace Signal.Beacon.Application.Processing
             }
 
             // Execute all immediate conducts
-            await this.conductManager.PublishAsync(conducts.Where(c => c.Delay <= 0), cancellationToken);
-
-            // Queue delayed conducts
-            foreach (var delayedConduct in conducts.Where(c => c.Delay > 0))
-                this.delayedConducts.Enqueue(delayedConduct, TimeSpan.FromMilliseconds(delayedConduct.Delay));
+            await this.conductManager.PublishAsync(conducts, cancellationToken);
         }
     }
 }
