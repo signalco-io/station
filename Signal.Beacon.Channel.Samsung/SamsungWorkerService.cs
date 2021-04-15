@@ -149,6 +149,7 @@ namespace Signal.Beacon.Channel.Samsung
             private readonly SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration;
             private readonly ILogger logger;
             private IWebsocketClient? client;
+            private bool isReconnecting = false;
 
 
             public TvRemote(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration, ILogger logger)
@@ -188,6 +189,9 @@ namespace Signal.Beacon.Channel.Samsung
                 try
                 {
                     this.Disconnect();
+
+                    this.isReconnecting = false;
+
                     await this.GetBasicInfoAsync();
                     await this.ConnectWsRemoteAsync();
                 }
@@ -221,6 +225,8 @@ namespace Signal.Beacon.Channel.Samsung
 
             private void ReconnectAfter(double delayMs = 30000)
             {
+                if (this.isReconnecting) return;
+
                 this.Disconnect();
                 Task.Delay(TimeSpan.FromMilliseconds(delayMs))
                     .ContinueWith(_ => this.BeginConnectTv());
@@ -230,6 +236,7 @@ namespace Signal.Beacon.Channel.Samsung
             {
                 try
                 {
+                    this.isReconnecting = true;
                     this.client?.Dispose();
                 }
                 catch (Exception ex)
