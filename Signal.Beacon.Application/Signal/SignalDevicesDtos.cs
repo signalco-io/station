@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Signal.Beacon.Core.Devices;
 
 namespace Signal.Beacon.Application.Signal
 {
@@ -22,6 +21,12 @@ namespace Signal.Beacon.Application.Signal
     public record SignalDeviceEndpointDto(
         string Channel,
         IEnumerable<SignalDeviceEndpointContactDto> Contacts);
+
+    public record SignalDeviceInfoUpdateDto(
+        string DeviceId,
+        string Alias,
+        string? Manufacturer,
+        string? Model);
 
     public record SignalDeviceEndpointsUpdateDto(
         string DeviceId,

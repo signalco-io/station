@@ -19,6 +19,7 @@ namespace Signal.Beacon.Core.Signal
 
         Task<IEnumerable<DeviceConfiguration>> GetDevicesAsync(CancellationToken cancellationToken);
 
-        Task UpdateDeviceAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken);
+        Task UpdateDeviceEndpointsAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken);
+        Task UpdateDeviceInfoAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken);
     }
 }

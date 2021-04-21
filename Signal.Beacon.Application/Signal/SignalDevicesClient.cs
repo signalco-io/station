@@ -12,7 +12,8 @@ namespace Signal.Beacon.Application.Signal
     {
         private const string SignalApiDevicesGetUrl = "/devices";
         private const string SignalApiDevicesRegisterUrl = "/devices/register";
-        private const string SignalApiDevicesEdnpointsUpdateUrl = "/devices/endpoints/update";
+        private const string SignalApiDevicesEndpointsUpdateUrl = "/devices/endpoints/update";
+        private const string SignalApiDevicesInfoUpdateUrl = "/devices/info/update";
         private const string SignalApiDevicesStatePublishUrl = "/devices/state";
 
         private readonly ISignalClient client;
@@ -42,10 +43,22 @@ namespace Signal.Beacon.Application.Signal
             });
         }
 
-        public async Task UpdateDeviceAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken)
+        public async Task UpdateDeviceInfoAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken)
         {
             await this.client.PostAsJsonAsync(
-                SignalApiDevicesEdnpointsUpdateUrl,
+                SignalApiDevicesInfoUpdateUrl,
+                new SignalDeviceInfoUpdateDto(
+                    deviceId,
+                    command.Alias,
+                    command.Manufacturer,
+                    command.Model),
+                cancellationToken);
+        }
+
+        public async Task UpdateDeviceEndpointsAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken)
+        {
+            await this.client.PostAsJsonAsync(
+                SignalApiDevicesEndpointsUpdateUrl,
                 new SignalDeviceEndpointsUpdateDto(
                     deviceId,
                     MapEndpointsToDto(command.Endpoints)),

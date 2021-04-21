@@ -39,11 +39,23 @@ namespace Signal.Beacon.Application
 
             try
             {
-                var deviceId = (await this.devicesDao.GetAsync(command.Identifier, cancellationToken))?.Id;
+                var device = await this.devicesDao.GetAsync(command.Identifier, cancellationToken);
+                var deviceId = device?.Id;
                 if (string.IsNullOrWhiteSpace(deviceId))
                     deviceId = await this.signalClient.RegisterDeviceAsync(command, cancellationToken);
-                else await this.signalClient.UpdateDeviceAsync(deviceId, command, cancellationToken);
+                else
+                {
+                    // Update info if needed
+                    if (command.Alias != device.Alias ||
+                        command.Manufacturer != device.Manufacturer ||
+                        command.Model != device.Model)
+                        await this.signalClient.UpdateDeviceInfoAsync(deviceId, command, cancellationToken);
 
+                    // Update endpoints
+                    await this.signalClient.UpdateDeviceEndpointsAsync(deviceId, command, cancellationToken);
+                }
+
+                // Update locally
                 await this.devicesDao.UpdateDeviceAsync(
                     command.Identifier,
                     new DeviceConfiguration(
