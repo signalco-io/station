@@ -12,8 +12,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
+using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Workers;
 using Websocket.Client;
@@ -33,34 +35,42 @@ namespace Signal.Beacon.Channel.Samsung
         private readonly IMacLookupService macLookupService;
         private readonly IConfigurationService configurationService;
         private readonly IConductSubscriberClient conductSubscriberClient;
+        private readonly ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler;
+        private readonly ICommandHandler<DeviceStateSetCommand> stateSetCommandHandler;
         private readonly ILogger<SamsungWorkerService> logger;
         private SamsungWorkerServiceConfiguration? configuration;
         private readonly List<TvRemote> tvRemotes = new();
+        private CancellationToken startCancellationToken;
 
         public SamsungWorkerService(
             IHostInfoService hostInfoService,
             IMacLookupService macLookupService,
             IConfigurationService configurationService,
             IConductSubscriberClient conductSubscriberClient,
+            ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler,
+            ICommandHandler<DeviceStateSetCommand> stateSetCommandHandler,
             ILogger<SamsungWorkerService> logger)
         {
             this.hostInfoService = hostInfoService ?? throw new ArgumentNullException(nameof(hostInfoService));
             this.macLookupService = macLookupService ?? throw new ArgumentNullException(nameof(macLookupService));
             this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
             this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
+            this.discoverCommandHandler = discoverCommandHandler ?? throw new ArgumentNullException(nameof(discoverCommandHandler));
+            this.stateSetCommandHandler = stateSetCommandHandler ?? throw new ArgumentNullException(nameof(stateSetCommandHandler));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
+            this.startCancellationToken = cancellationToken;
             this.configuration =
                 await this.configurationService.LoadAsync<SamsungWorkerServiceConfiguration>(
                     ConfigurationFileName,
                     cancellationToken);
 
             if (!this.configuration.TvRemotes.Any())
-                _ = this.DiscoverDevices(cancellationToken);
+                _ = this.DiscoverDevices();
             else this.configuration.TvRemotes.ForEach(this.ConnectTv);
 
             this.conductSubscriberClient.Subscribe(SamsungChannels.SamsungChannel, this.SamsungConductHandler);
@@ -79,11 +89,12 @@ namespace Signal.Beacon.Channel.Samsung
                                        throw new ArgumentException($"Invalid conduct value ${conduct.Value}"));
             } else if (conduct.Target.Contact == "state")
             {
-                if (conduct.Value is not bool boolValue)
+                var boolString = conduct.Value.ToString()?.ToLowerInvariant();
+                if (boolString != "true" && boolString != "false")
                     throw new Exception("Invalid contact value type. Expected boolean.");
 
                 // To turn on use WOL, to turn off use power key
-                if (boolValue)
+                if (boolString == "true")
                     matchedRemote.WakeOnLan();
                 else matchedRemote.KeyPress("KEY_POWER");
             }
@@ -92,11 +103,11 @@ namespace Signal.Beacon.Channel.Samsung
             return Task.CompletedTask;
         }
 
-        private async Task DiscoverDevices(CancellationToken cancellationToken)
+        private async Task DiscoverDevices()
         {
             var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
             var matchedHosts =
-                await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, cancellationToken);
+                await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, this.startCancellationToken);
             var hostsWithPort = matchedHosts.Where(mh => mh.OpenPorts.Count() == 1);
             foreach (var hostInfo in hostsWithPort)
             {
@@ -107,7 +118,7 @@ namespace Signal.Beacon.Channel.Samsung
                 }
 
                 var deviceCompany =
-                    await this.macLookupService.CompanyNameLookupAsync(hostInfo.PhysicalAddress, cancellationToken);
+                    await this.macLookupService.CompanyNameLookupAsync(hostInfo.PhysicalAddress, this.startCancellationToken);
                 if (!this.allowedMacCompanies.Contains(deviceCompany))
                 {
                     this.logger.LogDebug(
@@ -133,6 +144,10 @@ namespace Signal.Beacon.Channel.Samsung
         private void ConnectTv(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig remoteConfig)
         {
             var remote = new TvRemote(remoteConfig, this.logger);
+            remote.OnDiscover += (_, command) =>
+                this.discoverCommandHandler.HandleAsync(command, this.startCancellationToken);
+            remote.OnState += (_, command) =>
+                this.stateSetCommandHandler.HandleAsync(command, this.startCancellationToken);
             remote.BeginConnectTv();
             this.tvRemotes.Add(remote);
         }
@@ -149,7 +164,12 @@ namespace Signal.Beacon.Channel.Samsung
             private readonly SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration;
             private readonly ILogger logger;
             private IWebsocketClient? client;
-            private bool isReconnecting = false;
+            private bool isReconnecting;
+            private TvBasicInfoApiV2ResponseDto? tvBasicInfo;
+            private bool isDiscovered;
+
+            public event EventHandler<DeviceDiscoveredCommand> OnDiscover;
+            public event EventHandler<DeviceStateSetCommand> OnState;
 
 
             public TvRemote(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration, ILogger logger)
@@ -208,6 +228,15 @@ namespace Signal.Beacon.Channel.Samsung
                 }
             }
 
+            private void ReportOnline(bool isOnline)
+            {
+                if (this.Id is null) return;
+
+                this.OnState?.Invoke(this, new DeviceStateSetCommand(
+                    new DeviceTarget(SamsungChannels.SamsungChannel, this.Id, "state"),
+                    isOnline));
+            }
+
             private async Task ConnectWsRemoteAsync()
             {
                 this.client = await this.ConnectWsEndpointAsync(this.configuration.IpAddress, 8002,
@@ -217,15 +246,17 @@ namespace Signal.Beacon.Channel.Samsung
 
             private async Task GetBasicInfoAsync()
             {
-                var tvBasicInfo = await new HttpClient().GetFromJsonAsync<TvBasicInfoApiV2ResponseDto>(
+                this.tvBasicInfo = await new HttpClient().GetFromJsonAsync<TvBasicInfoApiV2ResponseDto>(
                     $"http://{this.configuration.IpAddress}:8001/api/v2/");
-                if (tvBasicInfo != null)
-                    this.configuration.Id = tvBasicInfo.Device.Id;
+                if (this.tvBasicInfo?.Device != null) 
+                    this.configuration.Id = this.tvBasicInfo.Device.Id;
             }
 
             private void ReconnectAfter(double delayMs = 30000)
             {
                 if (this.isReconnecting) return;
+
+                this.ReportOnline(false);
 
                 this.Disconnect();
                 Task.Delay(TimeSpan.FromMilliseconds(delayMs))
@@ -249,6 +280,8 @@ namespace Signal.Beacon.Channel.Samsung
             {
                 dynamic? response = JsonConvert.DeserializeObject(message.Text);
 
+                this.ReportOnline(true);
+
                 // Acquire token procedure
                 if (response?.data?.token != null)
                 {
@@ -262,6 +295,28 @@ namespace Signal.Beacon.Channel.Samsung
                     // Reconnect using token
                     this.client?.Dispose();
                     this.BeginConnectTv();
+                }
+
+                // Dispatch discovered when token is acquired
+                if (!this.isDiscovered && this.configuration.Token != null && this.Id != null && this.tvBasicInfo?.Device != null)
+                {
+                    this.OnDiscover?.Invoke(this, new DeviceDiscoveredCommand(
+                        this.tvBasicInfo.Device.Name ?? this.Id, 
+                        this.Id)
+                    {
+                        Manufacturer = "Samsung",
+                        Model = this.tvBasicInfo.Device.ModelName,
+                        Endpoints = new []
+                        {
+                            new DeviceEndpoint(SamsungChannels.SamsungChannel, new []
+                            {
+                                new DeviceContact("state", "bool", DeviceContactAccess.Read | DeviceContactAccess.Write),
+                                new DeviceContact("remote_key", "enum", DeviceContactAccess.Write)
+                            })
+                        }
+                    });
+
+                    this.isDiscovered = true;
                 }
             }
 
@@ -302,7 +357,7 @@ namespace Signal.Beacon.Channel.Samsung
             {
                 public DeviceDto? Device { get; set; }
 
-                public record DeviceDto(string? Id);
+                public record DeviceDto(string? Id, string? Name, string? ModelName);
             }
 
             public void Dispose()
