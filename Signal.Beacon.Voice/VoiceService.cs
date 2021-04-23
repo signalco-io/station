@@ -330,8 +330,10 @@ namespace Signal.Beacon.Voice
             }
         }
 
-        private async Task TryCacheSoundAsync(string text)
+        private Task TryCacheSoundAsync(string text)
         {
+            throw new NotImplementedException();
+
             try
             {
                 throw new NotImplementedException();

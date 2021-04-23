@@ -215,14 +215,19 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
                 return;
             }
 
-            foreach (var jProperty in JToken.Parse(payload)
-                .Value<JObject>()
-                .Properties())
+            // Get JSON properties (inside object)
+            var jsonPayload = JToken.Parse(payload);
+            var jsonPayloadObject = jsonPayload.Value<JObject>();
+            var properties = jsonPayloadObject?.Properties();
+            if (properties == null)
+                return;
+
+            foreach (var jProperty in properties)
             {
                 var input = inputs.FirstOrDefault(i => i.Name == jProperty.Name);
                 if (input == null)
                     continue;
-                
+
                 var target = new DeviceTarget(Zigbee2MqttChannels.DeviceChannel, device.Identifier, jProperty.Name);
                 var value = jProperty.Value.Value<string>();
                 var dataType = input.DataType;
@@ -235,7 +240,8 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
 
                 try
                 {
-                    await this.deviceSetStateHandler.HandleAsync(new DeviceStateSetCommand(target, mappedValue), cancellationToken);
+                    await this.deviceSetStateHandler.HandleAsync(new DeviceStateSetCommand(target, mappedValue),
+                        cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -341,7 +347,17 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
         {
             try
             {
+                // Retrieve device
                 var device = await this.devicesDao.GetAsync(deviceIdentifier, cancellationToken);
+                if (device == null)
+                {
+                    this.logger.LogDebug(
+                        "Refreshing device ignored. Device {DeviceIdentifier} not found",
+                        deviceIdentifier);
+                    return;
+                }
+
+                // Find matching contact
                 var inputContacts =
                     device.Endpoints.SelectMany(e => e.Contacts
                         .Where(i => i.Access.HasFlag(DeviceContactAccess.Get))

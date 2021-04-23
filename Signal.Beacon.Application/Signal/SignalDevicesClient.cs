@@ -33,9 +33,9 @@ namespace Signal.Beacon.Application.Signal
                 throw new Exception("Failed to retrieve devices from API.");
 
             return response.Select(d => new DeviceConfiguration(
-                d.Id,
-                d.Alias,
-                d.DeviceIdentifier,
+                d.Id ?? throw new InvalidOperationException(),
+                d.Alias ?? throw new InvalidOperationException(),
+                d.DeviceIdentifier ?? throw new InvalidOperationException(),
                 MapEndpointsFromDto(d.Endpoints ?? Enumerable.Empty<SignalDeviceEndpointDto>()))
             {
                 Manufacturer = d.Manufacturer,

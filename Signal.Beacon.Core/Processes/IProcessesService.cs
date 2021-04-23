@@ -7,7 +7,7 @@ namespace Signal.Beacon.Core.Processes
 {
     public interface IProcessesService
     {
-        Task<IEnumerable<StateTriggerProcess>> GetStateTriggeredAsync(CancellationToken cancellationToken);
+        Task<IEnumerable<Process>> GetStateTriggeredAsync(CancellationToken cancellationToken);
 
         Task<IEnumerable<Process>> GetAllAsync(CancellationToken cancellationToken);
     }

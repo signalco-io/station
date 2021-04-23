@@ -21,7 +21,7 @@ namespace Signal.Beacon.Application.Processing
         private readonly IConductManager conductManager;
         private readonly ILogger<Processor> logger;
 
-        private readonly IDelayedQueue<StateTriggerProcess> delayedTriggers = new DelayedQueue<StateTriggerProcess>();
+        private readonly IDelayedQueue<Process> delayedTriggers = new DelayedQueue<Process>();
 
 
         public Processor(
@@ -58,12 +58,15 @@ namespace Signal.Beacon.Application.Processing
         {
             return Task.CompletedTask;
         }
-        
+
         private async Task ProcessStateChangedAsync(DeviceTarget target, CancellationToken cancellationToken)
         {
             var processes = await this.processesService.GetStateTriggeredAsync(cancellationToken);
             var applicableProcesses = processes
-                .Where(p => !p.IsDisabled && p.Triggers.Any(t => t == target))
+                .Where(p => !p.IsDisabled)
+                .Where(p =>
+                    p.Configuration is StateTriggerProcessConfiguration pc &&
+                    (pc.Triggers?.Any(t => t == target) ?? false))
                 .ToList();
             if (!applicableProcesses.Any())
             {
@@ -72,16 +75,18 @@ namespace Signal.Beacon.Application.Processing
             }
 
             // Queue delayed triggers
-            foreach (var delayedStateTriggerProcess in applicableProcesses.Where(p => p.Delay > 0))
-                this.delayedTriggers.Enqueue(
-                    delayedStateTriggerProcess,
-                    TimeSpan.FromMilliseconds(delayedStateTriggerProcess.Delay));
-            
+            foreach (var delayedStateTriggerProcess in applicableProcesses.Where(p =>
+                (p.Configuration as StateTriggerProcessConfiguration)?.Delay > 0))
+                this.delayedTriggers.Enqueue(delayedStateTriggerProcess, TimeSpan.FromMilliseconds(
+                    (delayedStateTriggerProcess.Configuration as StateTriggerProcessConfiguration)?.Delay ?? 0));
+
             // Trigger no-delay processes immediately
-            await this.EvaluateAndExecute(applicableProcesses.Where(p => p.Delay <= 0), cancellationToken);
+            await this.EvaluateAndExecute(
+                applicableProcesses.Where(p => (p.Configuration as StateTriggerProcessConfiguration)?.Delay <= 0),
+                cancellationToken);
         }
 
-        private async Task EvaluateAndExecute(IEnumerable<StateTriggerProcess> applicableProcesses, CancellationToken cancellationToken)
+        private async Task EvaluateAndExecute(IEnumerable<Process> applicableProcesses, CancellationToken cancellationToken)
         {
             var conducts = new List<Conduct>();
 
@@ -90,15 +95,25 @@ namespace Signal.Beacon.Application.Processing
             {
                 try
                 {
+                    var configuration = process.Configuration as StateTriggerProcessConfiguration;
+                    if (configuration == null)
+                    {
+                        this.logger.LogDebug("Process {ProcessId} has no state trigger configuration. Ignored.", process.Id);
+                        continue;
+                    }
+
+                    if (configuration.Conducts == null) 
+                        return;
+
                     // Ignore if condition not met
-                    if (!await this.conditionEvaluatorService.IsConditionMetAsync(process.Condition, cancellationToken))
+                    if (!await this.conditionEvaluatorService.IsConditionMetAsync(configuration.Condition, cancellationToken))
                         continue;
 
                     // Queue conducts
                     this.logger.LogInformation(
                         "Process \"{ProcessName}\" queued...",
                         process.Alias);
-                    conducts.AddRange(process.Conducts);
+                    conducts.AddRange(configuration.Conducts);
                 }
                 catch (Exception ex)
                 {

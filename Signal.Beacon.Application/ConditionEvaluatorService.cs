@@ -1,11 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Conditions;
-using Signal.Beacon.Core.Conducts;
-using Signal.Beacon.Core.Extensions;
 
 namespace Signal.Beacon.Application
 {
@@ -19,8 +16,11 @@ namespace Signal.Beacon.Application
             this.valueProvider = valueProvider;
         }
 
-        public async Task<bool> IsConditionMetAsync(IConditionComparable comparable, CancellationToken cancellationToken)
+        public async Task<bool> IsConditionMetAsync(IConditionComparable? comparable, CancellationToken cancellationToken)
         {
+            if (comparable == null) 
+                return true;
+
             switch (comparable)
             {
                 case ConditionValueComparison conditionValueComparison:

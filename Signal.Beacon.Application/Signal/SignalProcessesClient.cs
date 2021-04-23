@@ -29,14 +29,12 @@ namespace Signal.Beacon.Application.Signal
             if (response == null)
                 throw new Exception("Failed to retrieve processes from API.");
 
-            return response.Select(p => new Process
-            {
-                Id = p.Id ?? throw new Exception("Got process with no ID."),
-                IsDisabled = p.IsDisabled ?? false,
-                Alias = p.Alias ?? throw new Exception("Got process with no Alias."),
-                Type = p.Type ?? throw new Exception("Got process with no Type."),
-                ConfigurationSerialized = p.ConfigurationSerialized
-            });
+            return response.Select(p => new Process(
+                p.Type ?? throw new Exception("Got process with no Type."),
+                p.Id ?? throw new Exception("Got process with no ID."),
+                p.Alias ?? throw new Exception("Got process with no Alias."),
+                p.IsDisabled ?? false,
+                p.ConfigurationSerialized));
         }
     }
 }

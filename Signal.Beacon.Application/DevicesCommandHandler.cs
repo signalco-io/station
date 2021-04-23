@@ -41,7 +41,7 @@ namespace Signal.Beacon.Application
             {
                 var device = await this.devicesDao.GetAsync(command.Identifier, cancellationToken);
                 var deviceId = device?.Id;
-                if (string.IsNullOrWhiteSpace(deviceId))
+                if (device == null || string.IsNullOrWhiteSpace(deviceId))
                     deviceId = await this.signalClient.RegisterDeviceAsync(command, cancellationToken);
                 else
                 {

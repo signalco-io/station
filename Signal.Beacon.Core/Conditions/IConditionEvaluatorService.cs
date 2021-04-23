@@ -5,6 +5,6 @@ namespace Signal.Beacon.Core.Conditions
 {
     public interface IConditionEvaluatorService
     {
-        Task<bool> IsConditionMetAsync(IConditionComparable comparable, CancellationToken cancellationToken);
+        Task<bool> IsConditionMetAsync(IConditionComparable? comparable, CancellationToken cancellationToken);
     }
 }

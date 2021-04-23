@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Signal.Beacon.Application.Auth;
 using Signal.Beacon.Application.Auth0;
 using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Core.Configuration;
@@ -37,13 +36,6 @@ namespace Signal.Beacon
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public class BeaconConfiguration
-        {
-            public string? Identifier { get; set; }
-
-            public AuthToken? Token {get;set;}
-        }
-
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             // Load configuration
@@ -69,9 +61,11 @@ namespace Signal.Beacon
                     // TODO: Post device flow request to user (CTA)
                     
                     var token = await new Auth0DeviceAuthorization().WaitTokenAsync(deviceCodeResponse, stoppingToken);
-                    this.logger.LogInformation("Authorized successfully.");
+                    if (token == null)
+                        throw new Exception("Token response not received.");
 
                     // Register Beacon
+                    this.logger.LogInformation("Authorized successfully.");
                     this.signalClientAuthFlow.AssignToken(token);
                     await this.signalClient.RegisterBeaconAsync(config.Identifier, stoppingToken);
 

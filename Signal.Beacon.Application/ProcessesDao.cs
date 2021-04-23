@@ -21,7 +21,7 @@ namespace Signal.Beacon.Application
         private readonly object cacheLock = new();
         private readonly JsonSerializerSettings deserializationSettings;
         private List<Process>? processes;
-        private List<StateTriggerProcess>? stateTriggerProcesses;
+        private List<Process>? stateTriggerProcesses;
         private Task<IEnumerable<Process>>? getProcessesTask;
 
         public ProcessesDao(
@@ -47,12 +47,12 @@ namespace Signal.Beacon.Application
             };
         }
 
-        public async Task<IEnumerable<StateTriggerProcess>> GetStateTriggersAsync(CancellationToken cancellationToken)
+        public async Task<IEnumerable<Process>> GetStateTriggersAsync(CancellationToken cancellationToken)
         {
             await this.CacheProcessesAsync(cancellationToken);
             this.CacheStateTriggers();
 
-            return this.stateTriggerProcesses ?? Enumerable.Empty<StateTriggerProcess>();
+            return this.stateTriggerProcesses ?? Enumerable.Empty<Process>();
         }
 
         public async Task<IEnumerable<Process>> GetAllAsync(CancellationToken cancellationToken)
@@ -69,19 +69,15 @@ namespace Signal.Beacon.Application
 
             this.stateTriggerProcesses = this.processes.Where(p => p.Type == "statetriggered").Select(p =>
             {
-                var process = string.IsNullOrWhiteSpace(p.ConfigurationSerialized)
-                    ? new StateTriggerProcess()
-                    : JsonConvert.DeserializeObject<StateTriggerProcess>(
+                var stateTriggerConfiguration = string.IsNullOrWhiteSpace(p.ConfigurationSerialized)
+                    ? new StateTriggerProcessConfiguration()
+                    : JsonConvert.DeserializeObject<StateTriggerProcessConfiguration>(
                         p.ConfigurationSerialized,
                         this.deserializationSettings);
-                if (process == null)
-                    throw new Exception($"Failed to process process \"{JsonSerializer.Serialize(p)}\".");
+                if (stateTriggerConfiguration == null)
+                    throw new Exception($"Failed to process state trigger configuration of process \"{JsonSerializer.Serialize(p)}\".");
 
-                process.IsDisabled = p.IsDisabled;
-                process.Alias = p.Alias;
-                process.Id = p.Id;
-
-                return process;
+                return p with {Configuration = stateTriggerConfiguration};
             }).ToList();
         }
 
