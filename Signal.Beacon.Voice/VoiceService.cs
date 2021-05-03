@@ -27,7 +27,7 @@ namespace Signal.Beacon.Voice
 
         private Porcupine? porcupine;
         private short[]? porcupineRecordingBuffer;
-        private const float PorcupineSensitivity = 1f;
+        private const float PorcupineSensitivity = 0.7f;
         private const string PorcupineModelFilePath = @"lib\common\porcupine_params.pv";
 
         private readonly List<SpeechScene> speechScenes = new();
@@ -86,7 +86,7 @@ namespace Signal.Beacon.Voice
                         return;
                 }
 
-                Thread.Yield();
+                Thread.Sleep(20);
             }
         }
 
@@ -186,10 +186,10 @@ namespace Signal.Beacon.Voice
 
             ALC.CaptureSamples(this.captureDevice.Value, ref buffer[0], frameLength);
 
-            for (var i = 0; i < buffer.Length; i++)
-            {
-                buffer[i] = (short)Math.Min(short.MaxValue, Math.Max(short.MinValue, buffer[i] * 10));
-            }
+            //for (var i = 0; i < buffer.Length; i++)
+            //{
+            //    buffer[i] = (short)Math.Min(short.MaxValue, Math.Max(short.MinValue, buffer[i] * 10));
+            //}
 
             return true;
         }

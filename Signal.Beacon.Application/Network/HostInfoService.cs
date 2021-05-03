@@ -6,12 +6,21 @@ using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Network;
 
 namespace Signal.Beacon.Application.Network
 {
     public class HostInfoService : IHostInfoService
     {
+        private readonly ILogger<HostInfoService> logger;
+
+        public HostInfoService(
+            ILogger<HostInfoService> logger)
+        {
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
         public async Task<IEnumerable<IHostInfo>> HostsAsync(
             IEnumerable<string> ipAddresses,
             int[] scanPorts,
@@ -29,16 +38,21 @@ namespace Signal.Beacon.Application.Network
                         cancellationToken);
                 }))
                 .ConfigureAwait(false);
-            return pingResults.Where(i => i != null).Select(i => i!);
+            var results = pingResults.Where(i => i != null).Select(i => i!).ToList();
+
+            foreach (var hostInfo in results) 
+                this.logger.LogDebug("Host: {@Host}", hostInfo);
+
+            return results;
         }
 
-        private static async Task<HostInfo?> GetHostInformationAsync(
+        private async Task<HostInfo?> GetHostInformationAsync(
             string address, 
             IEnumerable<int> applicablePorts, 
             string? arpLookupPhysical,
             CancellationToken cancellationToken)
         {
-            var ping = await PingIpAddressAsync(address, cancellationToken);
+            var ping = await this.PingIpAddressAsync(address, cancellationToken);
             if (ping == null)
                 return null;
 
@@ -92,7 +106,7 @@ namespace Signal.Beacon.Application.Network
             }
         }
 
-        private static async Task<long?> PingIpAddressAsync(string address, CancellationToken cancellationToken, int timeout = 1000, int retry = 2)
+        private async Task<long?> PingIpAddressAsync(string address, CancellationToken cancellationToken, int timeout = 1000, int retry = 2)
         {
             using var ping = new Ping();
             var tryCount = 0;
@@ -103,7 +117,10 @@ namespace Signal.Beacon.Application.Network
                 {
                     var result = (await ping.SendPingAsync(address, timeout).ConfigureAwait(false));
                     if (result.Status == IPStatus.Success)
+                    {
+                        this.logger.LogTrace("Host {HostIp} alive ({Roundtrip}ms)", address, result.RoundtripTime);
                         return result.RoundtripTime;
+                    }
                 }
                 catch
                 {

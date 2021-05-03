@@ -11,6 +11,7 @@ using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Mqtt;
+using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Workers;
 
 namespace Signal.Beacon.Channel.Signal
@@ -26,6 +27,7 @@ namespace Signal.Beacon.Channel.Signal
         private readonly IConductSubscriberClient conductSubscriberClient;
         private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
+        private readonly IHostInfoService hostInfoService;
         private readonly ILogger<SignalWorkerService> logger;
         private readonly List<IMqttClient> clients = new();
 
@@ -40,6 +42,7 @@ namespace Signal.Beacon.Channel.Signal
             IConductSubscriberClient conductSubscriberClient,
             ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
             ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
+            IHostInfoService hostInfoService,
             ILogger<SignalWorkerService> logger)
         {
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
@@ -49,6 +52,7 @@ namespace Signal.Beacon.Channel.Signal
             this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
             this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
             this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
+            this.hostInfoService = hostInfoService ?? throw new ArgumentNullException(nameof(hostInfoService));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -70,6 +74,12 @@ namespace Signal.Beacon.Channel.Signal
             }
 
             this.conductSubscriberClient.Subscribe(SignalChannels.DeviceChannel, this.ConductHandler);
+
+            // Cache local network devices
+            _ = this.hostInfoService.HostsAsync(
+                IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp()),
+                new[] {80, 443, 8080}, 
+                cancellationToken);
         }
 
         private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
