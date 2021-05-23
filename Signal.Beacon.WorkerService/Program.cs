@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Signal.Beacon.Application;
 using Signal.Beacon.Application.Signal;
+using Signal.Beacon.Channel.iRobot;
 using Signal.Beacon.Channel.PhilipsHue;
 using Signal.Beacon.Channel.Samsung;
 using Signal.Beacon.Channel.Signal;
@@ -32,6 +33,7 @@ namespace Signal.Beacon
                         .AddSignal()
                         .AddPhilipsHue()
                         .AddSamsung()
+                        .AddIRobot()
                         .AddVoice();
 
                     services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));

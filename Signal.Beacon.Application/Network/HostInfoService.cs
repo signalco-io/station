@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
@@ -46,6 +47,12 @@ namespace Signal.Beacon.Application.Network
             return results;
         }
 
+        private async Task<string?> ResolveHostNameAsync(string ipAddress)
+        {
+            var entry = await Dns.GetHostEntryAsync(ipAddress);
+            return entry.HostName;
+        }
+
         private async Task<HostInfo?> GetHostInformationAsync(
             string address, 
             IEnumerable<int> applicablePorts, 
@@ -58,11 +65,13 @@ namespace Signal.Beacon.Application.Network
 
             var portPing = Math.Min(2000, Math.Max(100, ping.Value * 2)); // Adaptive port connection timeout based on ping value
             var openPorts = (await OpenPortsAsync(address, applicablePorts, TimeSpan.FromMilliseconds(portPing))).ToList();
+            var hostName = await this.ResolveHostNameAsync(address);
 
             return new HostInfo(address, ping.Value)
             {
                 OpenPorts = openPorts,
-                PhysicalAddress = arpLookupPhysical
+                PhysicalAddress = arpLookupPhysical,
+                HostName = hostName
             };
         }
 

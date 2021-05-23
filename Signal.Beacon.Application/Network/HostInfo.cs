@@ -14,6 +14,8 @@ namespace Signal.Beacon.Application.Network
 
         public string? PhysicalAddress { get; init; }
 
+        public string? HostName { get; init; }
+
         public HostInfo(string ipAddress, long ping)
         {
             this.IpAddress = ipAddress;

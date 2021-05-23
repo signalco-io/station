@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -28,6 +29,9 @@ namespace Signal.Beacon.Application.Mqtt
 
         private readonly Dictionary<string, List<Func<MqttMessage, Task>>> subscriptions = new();
 
+        public event EventHandler<MqttMessage>? OnMessage;
+
+
 
         public MqttClient(ILogger<MqttClient> logger)
         {
@@ -35,7 +39,11 @@ namespace Signal.Beacon.Application.Mqtt
         }
 
 
-        public async Task StartAsync(string clientName, string hostAddress, CancellationToken cancellationToken)
+        public async Task StartAsync(
+            string clientName, string hostAddress, CancellationToken cancellationToken, 
+            int? port = null,
+            string? username = null, string? password = null,
+            bool allowInsecure = false)
         {
             if (string.IsNullOrWhiteSpace(clientName))
                 throw new ArgumentException("Value cannot be null or whitespace.", nameof(clientName));
@@ -53,12 +61,27 @@ namespace Signal.Beacon.Application.Mqtt
                 if (selectedAddress == null)
                     throw new Exception("Invalid host address - none.");
 
+                var optionsBuilder = new MqttClientOptionsBuilder()
+                    .WithClientId(clientName)
+                    .WithTcpServer(selectedAddress.ToString(), port);
+
+                if (allowInsecure)
+                    optionsBuilder = optionsBuilder.WithTls(new MqttClientOptionsBuilderTlsParameters()
+                    {
+                        AllowUntrustedCertificates = true,
+                        UseTls = true,
+                        IgnoreCertificateRevocationErrors = true,
+                        CertificateValidationHandler = _ => true,
+                        IgnoreCertificateChainErrors = true,
+                        SslProtocol = SslProtocols.Tls12
+                    });
+
+                if (!string.IsNullOrWhiteSpace(username) || !string.IsNullOrWhiteSpace(password))
+                    optionsBuilder = optionsBuilder.WithCredentials(username, password);
+
                 var options = new ManagedMqttClientOptionsBuilder()
                     .WithAutoReconnectDelay(TimeSpan.FromSeconds(5))
-                    .WithClientOptions(new MqttClientOptionsBuilder()
-                        .WithClientId(clientName)
-                        .WithTcpServer(selectedAddress.ToString())
-                        .Build())
+                    .WithClientOptions(optionsBuilder.Build())
                     .Build();
 
                 this.mqttClient = new MqttFactory().CreateManagedMqttClient();
@@ -119,6 +142,8 @@ namespace Signal.Beacon.Application.Mqtt
         {
             var message = new MqttMessage(this, arg.ApplicationMessage.Topic, Encoding.ASCII.GetString(arg.ApplicationMessage.Payload), arg.ApplicationMessage.Payload);
             this.logger.LogTrace("{ClientName} Topic {Topic}, Payload: {Payload}", this.clientName, message.Topic, message.Payload);
+
+            this.OnMessage?.Invoke(this, message);
 
             foreach (var subscription in this.subscriptions
                 .Where(subscription => MqttTopicFilterComparer.IsMatch(arg.ApplicationMessage.Topic, subscription.Key))

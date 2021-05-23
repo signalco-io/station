@@ -268,7 +268,9 @@ namespace Signal.Beacon.Voice
                     await this.PlaySoundAsync("Hello.");
 
                     var captureDeviceNames = this.GetAvailableCaptureDevices();
-                    var captureDeviceName = captureDeviceNames.OrderByDescending(d => d.Contains("BT", StringComparison.InvariantCultureIgnoreCase)).FirstOrDefault();
+                    var captureDeviceName = captureDeviceNames
+                        .OrderByDescending(d => d.Contains("BT", StringComparison.InvariantCultureIgnoreCase))
+                        .FirstOrDefault();
                     if (captureDeviceName == null)
                         throw new Exception("No capture devices available");
 
