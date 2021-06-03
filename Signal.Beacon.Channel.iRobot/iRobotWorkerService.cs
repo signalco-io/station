@@ -224,7 +224,7 @@ namespace Signal.Beacon.Channel.iRobot
                         string.Join(" ", buffer.Take(responseLength).Select(b => $"{b:X2}")));
 
                     // Handle password response
-                    if (responseLength > 7 && buffer[0] == 0xF0)
+                    if (responseLength > 7 && buffer[0] == 0xF0 && buffer[6] == 0x00)
                     {
                         // Process response
                         var passwordStringUtf8 = Encoding.UTF8.GetString(buffer[07..(responseLength-1)]);
