@@ -16,6 +16,8 @@ namespace Signal.Beacon.Core.Mqtt
         Task SubscribeAsync(string topic, Func<MqttMessage, Task> handler);
 
         Task PublishAsync(string topic, object? payload, bool retain = false);
-        event EventHandler<MqttMessage> OnMessage;
+
+        event EventHandler? OnUnavailable;
+        event EventHandler<MqttMessage>? OnMessage;
     }
 }

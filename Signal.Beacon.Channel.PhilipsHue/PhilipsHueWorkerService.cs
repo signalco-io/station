@@ -12,6 +12,7 @@ using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Workers;
 
 namespace Signal.Beacon.Channel.PhilipsHue
@@ -20,9 +21,14 @@ namespace Signal.Beacon.Channel.PhilipsHue
     {
         private const int RegisterBridgeRetryTimes = 12;
         private const string PhilipsHueConfigurationFileName = "PhilipsHue.json";
+        private const string BrightnessContactName = "brightness";
+        private const string ColorTemperatureContactName = "color-temperature";
+        private const string ColorRgbContactName = "color-rgb";
 
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateSetHandler;
-        private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
+        private readonly ICommandValueHandler<DeviceDiscoveredCommand, string> deviceDiscoveryHandler;
+        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
+        private readonly IDevicesDao devicesDao;
         private readonly IConductSubscriberClient conductSubscriberClient;
         private readonly ILogger<PhilipsHueWorkerService> logger;
         private readonly IConfigurationService configurationService;
@@ -33,13 +39,17 @@ namespace Signal.Beacon.Channel.PhilipsHue
 
         public PhilipsHueWorkerService(
             ICommandHandler<DeviceStateSetCommand> deviceStateSerHandler,
-            ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
+            ICommandValueHandler<DeviceDiscoveredCommand, string> deviceDiscoveryHandler,
+            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
+            IDevicesDao devicesDao,
             IConductSubscriberClient conductSubscriberClient,
             ILogger<PhilipsHueWorkerService> logger,
             IConfigurationService configurationService)
         {
             this.deviceStateSetHandler = deviceStateSerHandler ?? throw new ArgumentNullException(nameof(deviceStateSerHandler));
             this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
+            this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
             this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
@@ -74,11 +84,46 @@ namespace Signal.Beacon.Channel.PhilipsHue
                 return;
             }
 
-            // Retrieve bridge connection and send command
+            // Retrieve bridge connection
             var bridgeConnection = await this.GetBridgeConnectionAsync(light.BridgeId);
-            await bridgeConnection.LocalClient.SendCommandAsync(
-                new LightCommand {On = conduct.Value.ToString()?.ToLowerInvariant() == "true"},
-                new[] {light.OnBridgeId});
+            var bridgeLight = await bridgeConnection.LocalClient.GetLightAsync(light.OnBridgeId);
+            if (bridgeLight == null)
+            {
+                this.logger.LogWarning(
+                    "No light with specified identifier found on bridge. Target identifier: {TargetIdentifier}. LightBridgeId: {OnBridgeId}",
+                    lightIdentifier, light.OnBridgeId);
+                return;
+            }
+
+            switch (conduct.Target.Contact)
+            {
+                case "on":
+                    await bridgeConnection.LocalClient.SendCommandAsync(
+                        new LightCommand { On = conduct.Value.ToString()?.ToLowerInvariant() == "true" },
+                        new[] { light.OnBridgeId });
+                    break;
+                case ColorTemperatureContactName:
+                    if (!double.TryParse(conduct.Value.ToString(), out var temp))
+                        throw new Exception("Invalid temperature contact value.");
+
+                    await bridgeConnection.LocalClient.SendCommandAsync(
+                        new LightCommand { ColorTemperature = (int)temp.Denormalize(bridgeLight.Capabilities.Control.ColorTemperature.Min, bridgeLight.Capabilities.Control.ColorTemperature.Max) },
+                        new[] { light.OnBridgeId });
+                    break;
+                case BrightnessContactName:
+                    if (!double.TryParse(conduct.Value.ToString(), out var brightness))
+                        throw new Exception("Invalid brightness contact value.");
+
+                    await bridgeConnection.LocalClient.SendCommandAsync(
+                        new LightCommand { Brightness = (byte)brightness.Denormalize(0, 255) },
+                        new[] { light.OnBridgeId });
+                    break;
+                default:
+                    throw new NotSupportedException("Not supported contact.");
+            }
+
+            // Refresh immediately 
+            await this.RefreshLightStateAsync(bridgeConnection, light, cancellationToken);
         }
 
         private async Task PeriodicalLightStateRefreshAsync(CancellationToken cancellationToken)
@@ -124,16 +169,27 @@ namespace Signal.Beacon.Channel.PhilipsHue
             var updatedLight = await bridge.LocalClient.GetLightAsync(light.OnBridgeId);
             if (updatedLight != null)
             {
-                var oldLight = this.lights[light.UniqueId];
+                this.lights.TryGetValue(light.UniqueId, out var oldLight);
                 var newLight = updatedLight.AsPhilipsHueLight(bridge.Config.Id);
                 this.lights[light.UniqueId] = newLight;
 
+                // Sync state
                 if (oldLight == null || !newLight.State.Equals(oldLight.State))
                 {
                     await this.deviceStateSetHandler.HandleAsync(
                         new DeviceStateSetCommand(
                             new DeviceTarget(PhilipsHueChannels.DeviceChannel, ToSignalDeviceId(light.UniqueId), "on"),
                             updatedLight.State.On),
+                        cancellationToken);
+                    await this.deviceStateSetHandler.HandleAsync(
+                        new DeviceStateSetCommand(
+                            new DeviceTarget(PhilipsHueChannels.DeviceChannel, ToSignalDeviceId(light.UniqueId), BrightnessContactName),
+                            newLight.State.Brightness),
+                        cancellationToken);
+                    await this.deviceStateSetHandler.HandleAsync(
+                        new DeviceStateSetCommand(
+                            new DeviceTarget(PhilipsHueChannels.DeviceChannel, ToSignalDeviceId(light.UniqueId), ColorTemperatureContactName),
+                            newLight.State.Temperature),
                         cancellationToken);
                 }
             }
@@ -207,7 +263,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
                             continue;
                         }
 
-                        this.LightDiscoveredAsync(bridgeId, light, cancellationToken);
+                        await this.LightDiscoveredAsync(bridgeId, light, cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -225,24 +281,62 @@ namespace Signal.Beacon.Channel.PhilipsHue
         }
         
 
-        private void LightDiscoveredAsync(string bridgeId, Light light, CancellationToken cancellationToken)
+        private async Task LightDiscoveredAsync(string bridgeId, Light light, CancellationToken cancellationToken)
         {
             this.lights.Add(light.UniqueId, light.AsPhilipsHueLight(bridgeId));
 
-            this.deviceDiscoveryHandler.HandleAsync(
+            // Discover device
+            var deviceId = await this.deviceDiscoveryHandler.HandleAsync(
                 new DeviceDiscoveredCommand(light.Name, ToSignalDeviceId(light.UniqueId))
                 {
                     Manufacturer = light.ManufacturerName,
-                    Model = light.ModelId,
-                    Endpoints = new[]
-                    {
-                        new DeviceEndpoint(PhilipsHueChannels.DeviceChannel,
-                            new[]
-                            {
-                                new DeviceContact("on", "bool", DeviceContactAccess.Read | DeviceContactAccess.Write)
-                            })
-                    }
+                    Model = light.ModelId
                 }, cancellationToken);
+
+            // Discover contacts
+            var device = await this.devicesDao.GetByIdAsync(deviceId, cancellationToken);
+            if (device == null)
+            {
+                this.logger.LogWarning("Can't discover device contacts because device with ID: {DeviceId} is not found.", deviceId);
+                return;
+            }
+
+            // Update standard contacts
+            await this.deviceContactUpdateHandler.HandleManyAsync(
+                cancellationToken,
+                DeviceContactUpdateCommand.FromDevice(
+                    device, PhilipsHueChannels.DeviceChannel, "on", c => c with
+                    {
+                        DataType = "bool",
+                        Access = DeviceContactAccess.Read | DeviceContactAccess.Write
+                    }),
+                new DeviceContactUpdateCommand(deviceId, PhilipsHueChannels.DeviceChannel,
+                    device.ContactOrDefault(PhilipsHueChannels.DeviceChannel, BrightnessContactName) with
+                    {
+                        DataType = "double",
+                        Access = DeviceContactAccess.Read | DeviceContactAccess.Write
+                    }));
+
+            // Color temperature contact
+            var colorTemperatureInfo = light.Capabilities.Control.ColorTemperature;
+            if (colorTemperatureInfo.Max > 0 &&
+                colorTemperatureInfo.Max != colorTemperatureInfo.Min)
+                await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                    device, PhilipsHueChannels.DeviceChannel, ColorTemperatureContactName, c => c with
+                    {
+                        DataType = "colortemp",
+                        Access = DeviceContactAccess.Read | DeviceContactAccess.Write
+                    }), cancellationToken);
+                
+            // Color contact
+            var colorInfo = light.Capabilities.Control.ColorGamut;
+            if (colorInfo != null)
+                await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                    device, PhilipsHueChannels.DeviceChannel, ColorRgbContactName, c => c with
+                    {
+                        DataType = "colorrgb",
+                        Access = DeviceContactAccess.Read | DeviceContactAccess.Write
+                    }), cancellationToken);
         }
 
         private static string ToPhilipsHueDeviceId(string signalId) => signalId[(PhilipsHueChannels.DeviceChannel.Length + 1)..];

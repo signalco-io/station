@@ -28,5 +28,12 @@ namespace Signal.Beacon.Core.Devices
             this.Endpoints = endpoints ?? Enumerable.Empty<DeviceEndpoint>();
             this.IsConfigured = true;
         }
+
+        public DeviceContact? Contact(string channelName, string contactName) =>
+            this.Endpoints.FirstOrDefault(e => e.Channel == channelName)?
+                .Contacts.FirstOrDefault(c => c.Name == contactName);
+
+        public DeviceContact ContactOrDefault(string channelName, string contactName) =>
+            this.Contact(channelName, contactName) ?? new DeviceContact(contactName, "", DeviceContactAccess.None);
     }
 }

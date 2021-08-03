@@ -12,11 +12,16 @@ namespace Signal.Beacon.Application.Signal
         Get = 0x4
     }
 
+    public record SignalDeviceEndpointContactDataValueDto(
+        string Value,
+        string Label);
+
     public record SignalDeviceEndpointContactDto(
         string Name,
         string DataType,
         SignalDeviceEndpointContactAccessDto Access,
-        double? NoiseReductionDelta);
+        double? NoiseReductionDelta,
+        IEnumerable<SignalDeviceEndpointContactDataValueDto>? DataValues);
 
     public record SignalDeviceEndpointDto(
         string Channel,
@@ -35,7 +40,6 @@ namespace Signal.Beacon.Application.Signal
     public record SignalDeviceRegisterDto(
         string DeviceIdentifier, 
         string Alias,
-        IEnumerable<SignalDeviceEndpointDto> Endpoints, 
         string? Manufacturer, 
         string? Model);
 

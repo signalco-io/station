@@ -10,6 +10,7 @@ using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Workers;
@@ -27,6 +28,7 @@ namespace Signal.Beacon.Channel.Signal
         private readonly IConductSubscriberClient conductSubscriberClient;
         private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
+        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
         private readonly IHostInfoService hostInfoService;
         private readonly ILogger<SignalWorkerService> logger;
         private readonly List<IMqttClient> clients = new();
@@ -42,6 +44,7 @@ namespace Signal.Beacon.Channel.Signal
             IConductSubscriberClient conductSubscriberClient,
             ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
             ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
+            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
             IHostInfoService hostInfoService,
             ILogger<SignalWorkerService> logger)
         {
@@ -52,6 +55,7 @@ namespace Signal.Beacon.Channel.Signal
             this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
             this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
             this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
             this.hostInfoService = hostInfoService ?? throw new ArgumentNullException(nameof(hostInfoService));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -113,20 +117,21 @@ namespace Signal.Beacon.Channel.Signal
                     await this.deviceDiscoveryHandler.HandleAsync(
                         new DeviceDiscoveredCommand(
                             config.Hostname,
-                            deviceIdentifier,
-                            new DeviceEndpoint[]
-                            {
-                                // TODO: Parse endpoint configuration
-                                new(SignalChannels.DeviceChannel,
-                                    new[]
-                                    {
-                                        new DeviceContact("locked", "bool", DeviceContactAccess.Read),
-                                        new DeviceContact("lock", "bool", DeviceContactAccess.Write),
-                                        new DeviceContact("unlock", "bool", DeviceContactAccess.Write),
-                                        new DeviceContact("open", "bool", DeviceContactAccess.Write)
-                                    }),
-                            }),
+                            deviceIdentifier),
                         this.startCancellationToken);
+
+                    var device = await this.devicesDao.GetAsync(deviceIdentifier, this.startCancellationToken);
+
+                    await this.deviceContactUpdateHandler.HandleManyAsync(
+                        this.startCancellationToken,
+                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "locked",
+                            c => c with { DataType = "bool", Access = DeviceContactAccess.Read }),
+                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "lock",
+                            c => c with { DataType = "action", Access = DeviceContactAccess.Write }),
+                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "unlock",
+                            c => c with { DataType = "action", Access = DeviceContactAccess.Write }),
+                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "open",
+                            c => c with { DataType = "action", Access = DeviceContactAccess.Write }));
 
                     // Subscribe for device telemetry
                     var telemetrySubscribeTopic = $"signal/{config.MqttTopic}/#";

@@ -26,6 +26,7 @@ namespace Signal.Beacon.Channel.Tasmota
         private readonly IConductSubscriberClient conductSubscriberClient;
         private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
+        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
         private readonly ILogger<TasmotaWorkerService> logger;
         private readonly List<IMqttClient> clients = new();
 
@@ -40,6 +41,7 @@ namespace Signal.Beacon.Channel.Tasmota
             IConductSubscriberClient conductSubscriberClient,
             ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
             ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
+            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
             ILogger<TasmotaWorkerService> logger)
         {
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
@@ -49,6 +51,7 @@ namespace Signal.Beacon.Channel.Tasmota
             this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
             this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
             this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -102,15 +105,17 @@ namespace Signal.Beacon.Channel.Tasmota
                     await this.deviceDiscoveryHandler.HandleAsync(
                         new DeviceDiscoveredCommand(
                             config.DeviceName,
-                            deviceIdentifier,
-                            new DeviceEndpoint[]
+                            deviceIdentifier),
+                        this.startCancellationToken);
+
+                    // Signal contact update
+                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                            await this.devicesDao.GetAsync(deviceIdentifier, this.startCancellationToken),
+                            TasmotaChannels.DeviceChannel,
+                            "A0",
+                            c => c with
                             {
-                                new(TasmotaChannels.DeviceChannel,
-                                    new[]
-                                    {
-                                        new DeviceContact("A0", "double", DeviceContactAccess.Get)
-                                            {NoiseReductionDelta = 5}
-                                    })
+                                DataType = "double", Access = DeviceContactAccess.Read, NoiseReductionDelta = 5
                             }),
                         this.startCancellationToken);
                 }

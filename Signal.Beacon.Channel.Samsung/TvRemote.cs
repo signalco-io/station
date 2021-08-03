@@ -6,6 +6,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -19,19 +20,26 @@ namespace Signal.Beacon.Channel.Samsung
     {
         public string? Id => this.configuration.Id;
 
+        private readonly IDevicesDao devicesDao;
         private readonly SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration;
         private readonly ILogger logger;
         private IWebsocketClient? client;
         private bool isReconnecting;
         private TvBasicInfoApiV2ResponseDto? tvBasicInfo;
         private bool isDiscovered;
+        private CancellationToken cancellationToken;
 
         public event EventHandler<DeviceDiscoveredCommand>? OnDiscover;
+        public event EventHandler<DeviceContactUpdateCommand>? OnContactUpdate;  
         public event EventHandler<DeviceStateSetCommand>? OnState;
 
 
-        public TvRemote(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration, ILogger logger)
+        public TvRemote(
+            IDevicesDao devicesDao,
+            SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig configuration, 
+            ILogger logger)
         {
+            this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
             this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -63,10 +71,12 @@ namespace Signal.Beacon.Channel.Samsung
                 IPAddress.Parse(this.configuration.IpAddress));
         }
 
-        public async void BeginConnectTv()
+        public async void BeginConnectTv(CancellationToken cancellationToken)
         {
             try
             {
+                this.cancellationToken = cancellationToken;
+
                 this.Disconnect();
 
                 this.isReconnecting = false;
@@ -119,7 +129,7 @@ namespace Signal.Beacon.Channel.Samsung
 
             this.Disconnect();
             Task.Delay(TimeSpan.FromMilliseconds(delayMs))
-                .ContinueWith(_ => this.BeginConnectTv());
+                .ContinueWith(_ => this.BeginConnectTv(this.cancellationToken));
         }
 
         private void Disconnect()
@@ -135,7 +145,7 @@ namespace Signal.Beacon.Channel.Samsung
             }
         }
 
-        private void HandleTvRemoteMessage(ResponseMessage message)
+        private async void HandleTvRemoteMessage(ResponseMessage message)
         {
             dynamic? response = JsonConvert.DeserializeObject(message.Text);
 
@@ -154,7 +164,7 @@ namespace Signal.Beacon.Channel.Samsung
 
                 // Reconnect using token
                 this.client?.Dispose();
-                this.BeginConnectTv();
+                this.BeginConnectTv(this.cancellationToken);
             }
 
             // Dispatch discovered when token is acquired
@@ -165,16 +175,27 @@ namespace Signal.Beacon.Channel.Samsung
                     this.Id)
                 {
                     Manufacturer = "Samsung",
-                    Model = this.tvBasicInfo.Device.ModelName,
-                    Endpoints = new[]
-                    {
-                        new DeviceEndpoint(SamsungChannels.SamsungChannel, new []
-                        {
-                            new DeviceContact("state", "bool", DeviceContactAccess.Read | DeviceContactAccess.Write),
-                            new DeviceContact("remote_key", "enum", DeviceContactAccess.Write)
-                        })
-                    }
+                    Model = this.tvBasicInfo.Device.ModelName
                 });
+
+                // Retrieve device (that was just discovered)
+                var device = await this.devicesDao.GetAsync(this.Id, this.cancellationToken);
+                if (device == null)
+                {
+                    this.logger.LogWarning(
+                        "Can't update device contacts because device with Identifier: {DeviceIdentifier} is not found.",
+                        this.Id);
+                    return;
+                }
+
+                this.OnContactUpdate?.Invoke(this, DeviceContactUpdateCommand.FromDevice(
+                    device, SamsungChannels.SamsungChannel, "state",
+                    c => c with { DataType = "bool", Access = DeviceContactAccess.Read | DeviceContactAccess.Write }));
+
+                // TODO: Assign keyboard to DataValues
+                this.OnContactUpdate?.Invoke(this, DeviceContactUpdateCommand.FromDevice(
+                    device, SamsungChannels.SamsungChannel, "remote_key",
+                    c => c with { DataType = "action", Access = DeviceContactAccess.Read }));
 
                 this.isDiscovered = true;
             }

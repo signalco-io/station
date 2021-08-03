@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
@@ -14,9 +15,13 @@ using MQTTnet.Client.Connecting;
 using MQTTnet.Client.Disconnecting;
 using MQTTnet.Client.Options;
 using MQTTnet.Extensions.ManagedClient;
+using MQTTnet.Formatter;
+using MQTTnet.Protocol;
 using MQTTnet.Server;
+using Newtonsoft.Json;
 using Signal.Beacon.Core.Mqtt;
 using IMqttClient = Signal.Beacon.Core.Mqtt.IMqttClient;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Signal.Beacon.Application.Mqtt
 {
@@ -31,6 +36,9 @@ namespace Signal.Beacon.Application.Mqtt
 
         public event EventHandler<MqttMessage>? OnMessage;
 
+        private const int UnavailableConnectionFailedThreshold = 5;
+        private int connectionFailedCounter = 0;
+        public event EventHandler? OnUnavailable;
 
 
         public MqttClient(ILogger<MqttClient> logger)
@@ -66,7 +74,7 @@ namespace Signal.Beacon.Application.Mqtt
                     .WithTcpServer(selectedAddress.ToString(), port);
 
                 if (allowInsecure)
-                    optionsBuilder = optionsBuilder.WithTls(new MqttClientOptionsBuilderTlsParameters()
+                    optionsBuilder = optionsBuilder.WithTls(new MqttClientOptionsBuilderTlsParameters
                     {
                         AllowUntrustedCertificates = true,
                         UseTls = true,
@@ -104,6 +112,7 @@ namespace Signal.Beacon.Application.Mqtt
 
         public async Task StopAsync(CancellationToken cancellationToken)
         {
+            this.connectionFailedCounter = 0;
             if (this.mqttClient != null)
                 await this.mqttClient.StopAsync();
         }
@@ -124,18 +133,23 @@ namespace Signal.Beacon.Application.Mqtt
 
         public async Task PublishAsync(string topic, object? payload, bool retain = false)
         {
-            var withPayload = payload == null
-                ? null
-                : payload is string payloadString
-                    ? payloadString
-                    : JsonSerializer.Serialize(payload, payload.GetType());
+            var withPayload = payload switch
+            {
+                null => null,
+                byte[] payloadByteArray => payloadByteArray,
+                string payloadString => Encoding.UTF8.GetBytes(payloadString),
+                _ => Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload, payload.GetType()))
+            };
 
-            await this.mqttClient.PublishAsync(
+            var result = await this.mqttClient.PublishAsync(
                 new MqttApplicationMessageBuilder()
                     .WithTopic(topic)
                     .WithPayload(withPayload)
                     .WithRetainFlag(retain)
                     .Build());
+
+            this.logger.LogTrace("{ClientName} Topic {Topic}, Response: ({StatusCode}) {Response}",
+                this.clientName, topic, result.ReasonCode, result.ReasonString);
         }
 
         private async Task MessageHandler(MqttApplicationMessageReceivedEventArgs arg)
@@ -162,12 +176,22 @@ namespace Signal.Beacon.Application.Mqtt
 
         private Task DisconnectedHandler(MqttClientDisconnectedEventArgs arg)
         {
+            // Dispatch unavailable event when connection failed counter reaches threshold
+            // Set counter to min value so we don't dispatch event again
+            if (arg.Exception.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused } &&
+                ++this.connectionFailedCounter >= UnavailableConnectionFailedThreshold)
+            {
+                this.OnUnavailable?.Invoke(this, EventArgs.Empty);
+                this.connectionFailedCounter = int.MinValue;
+            }
+
             this.logger.LogInformation(arg.Exception, "MQTT connection closed {ClientName}.", this.clientName);
             return Task.CompletedTask;
         }
 
         private Task ConnectedHandler(MqttClientConnectedEventArgs arg)
         {
+            this.connectionFailedCounter = 0;
             this.logger.LogInformation("MQTT connected {ClientName}.", this.clientName);
             return Task.CompletedTask;
         }

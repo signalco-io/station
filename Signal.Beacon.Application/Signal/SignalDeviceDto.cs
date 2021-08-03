@@ -15,5 +15,7 @@ namespace Signal.Beacon.Application.Signal
         public string? Manufacturer { get; set; }
 
         public string? Model { get; set; }
+
+        public IEnumerable<SignalDeviceContactStateDto>? States { get; set; }
     }
 }

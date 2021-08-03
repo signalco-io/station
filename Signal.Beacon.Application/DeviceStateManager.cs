@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -9,7 +7,6 @@ using Signal.Beacon.Application.PubSub;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Signal;
-using Signal.Beacon.Core.Values;
 
 namespace Signal.Beacon.Application
 {
@@ -19,8 +16,7 @@ namespace Signal.Beacon.Application
         private readonly ISignalDevicesClient signalClient;
         private readonly IDevicesDao devicesDao;
         private readonly ILogger<DeviceStateManager> logger;
-        private readonly ConcurrentDictionary<DeviceContactTarget, object?> states = new();
-        private readonly ConcurrentDictionary<DeviceContactTarget, ICollection<IHistoricalValue>> statesHistory = new();
+        private readonly ConcurrentDictionary<DeviceTarget, object?> states = new();
 
 
         public DeviceStateManager(
@@ -38,6 +34,8 @@ namespace Signal.Beacon.Application
 
         public IDisposable Subscribe(Func<DeviceTarget, CancellationToken, Task> handler) => 
             this.deviceStateHub.Subscribe(this, handler);
+
+        internal void SetLocalState(DeviceTarget target, object? value) => this.states.AddOrSet(target, value);
 
         public async Task SetStateAsync(DeviceTarget target, object? value, CancellationToken cancellationToken)
         {
@@ -98,8 +96,7 @@ namespace Signal.Beacon.Application
             }
 
             var timeStamp = DateTime.UtcNow;
-            this.states.AddOrSet(target, setValue);
-            this.statesHistory.Append(target, new HistoricalValue(setValue, timeStamp));
+            this.SetLocalState(target, setValue);
 
             // Publish state changed to local workers
             await this.deviceStateHub.PublishAsync(new[] {target}, cancellationToken);
@@ -108,6 +105,12 @@ namespace Signal.Beacon.Application
             try
             {
                 await this.signalClient.DevicesPublishStateAsync(device.Id, target, setValue, timeStamp, cancellationToken);
+
+                this.logger.LogDebug(
+                    "Device state updated - {DeviceId} {Contact}: {Value}",
+                    target.Identifier,
+                    target.Contact,
+                    setValue);
             }
             catch (Exception ex) when (ex.Message.Contains("IDX10223"))
             {
@@ -121,12 +124,6 @@ namespace Signal.Beacon.Application
                     "Failed to push device state update to Signal - Unknown error. Device state {Target} to \"{Value}\"",
                     target, value);
             }
-
-            this.logger.LogDebug(
-                "Device state updated - {DeviceId} {Contact}: {Value}", 
-                target.Identifier, 
-                target.Contact,
-                setValue);
         }
 
         private static double? ParseValueDouble(object? value)
@@ -148,16 +145,7 @@ namespace Signal.Beacon.Application
             return setValue;
         }
 
-        public Task<IEnumerable<IHistoricalValue>?> GetStateHistoryAsync(
-            DeviceContactTarget target,
-            DateTime startTimeStamp, 
-            DateTime endTimeStamp) =>
-            this.statesHistory.TryGetValue(target, out var history)
-                // ReSharper disable once ConstantConditionalAccessQualifier
-                ? Task.FromResult(history?.Where(hv => hv.TimeStamp >= startTimeStamp && hv.TimeStamp <= endTimeStamp))
-                : Task.FromResult<IEnumerable<IHistoricalValue>?>(null);
-
-        public Task<object?> GetStateAsync(DeviceContactTarget target) =>
+        public Task<object?> GetStateAsync(DeviceTarget target) =>
             this.states.TryGetValue(target, out var state)
                 ? Task.FromResult(state)
                 : Task.FromResult<object?>(null);

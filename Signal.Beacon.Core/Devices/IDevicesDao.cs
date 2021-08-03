@@ -12,16 +12,12 @@ namespace Signal.Beacon.Core.Devices
         
         Task<IEnumerable<DeviceConfiguration>> GetAllAsync(CancellationToken cancellationToken);
         
-        Task<IEnumerable<IHistoricalValue>?> GetStateHistoryAsync(DeviceContactTarget deviceTarget,
-            DateTime startTimeStamp, DateTime endTimeStamp, CancellationToken cancellationToken);
-
-        Task<object?> GetStateAsync(DeviceContactTarget deviceTarget, CancellationToken cancellationToken);
+        Task<object?> GetStateAsync(DeviceTarget deviceTarget, CancellationToken cancellationToken);
         
-        Task UpdateDeviceAsync(string deviceId, DeviceConfiguration deviceConfiguration, CancellationToken cancellationToken);
-
         Task<DeviceConfiguration?> GetByAliasAsync(string alias, CancellationToken cancellationToken);
 
         Task<DeviceContact?> GetInputContactAsync(DeviceTarget target, CancellationToken cancellationToken);
+
         Task<DeviceConfiguration?> GetByIdAsync(string deviceId, CancellationToken cancellationToken);
     }
 }

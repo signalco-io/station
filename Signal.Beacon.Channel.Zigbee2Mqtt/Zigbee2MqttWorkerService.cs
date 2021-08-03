@@ -25,6 +25,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
         private readonly IDevicesDao devicesDao;
         private readonly ICommandHandler<DeviceStateSetCommand> deviceSetStateHandler;
         private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoverHandler;
+        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
         private readonly IConductSubscriberClient conductSubscriberClient;
         private readonly IMqttClientFactory mqttClientFactory;
         private readonly IMqttDiscoveryService mqttDiscoveryService;
@@ -42,6 +43,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             IDevicesDao devicesDao,
             ICommandHandler<DeviceStateSetCommand> devicesService,
             ICommandHandler<DeviceDiscoveredCommand> deviceDiscoverHandler,
+            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
             IConductSubscriberClient conductSubscriberClient,
             IMqttClientFactory mqttClientFactory,
             IMqttDiscoveryService mqttDiscoveryService,
@@ -51,6 +53,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
             this.deviceSetStateHandler = devicesService ?? throw new ArgumentNullException(nameof(devicesService));
             this.deviceDiscoverHandler = deviceDiscoverHandler ?? throw new ArgumentNullException(nameof(deviceDiscoverHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
             this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
             this.mqttClientFactory = mqttClientFactory ?? throw new ArgumentNullException(nameof(mqttClientFactory));
             this.mqttDiscoveryService = mqttDiscoveryService ?? throw new ArgumentNullException(nameof(mqttDiscoveryService));
@@ -286,6 +289,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             if (string.IsNullOrWhiteSpace(bridgeDevice.IeeeAddress))
                 throw new ArgumentException("Device IEEE address is required.");
 
+            // Discover device
             var deviceConfig = new DeviceDiscoveredCommand(
                 bridgeDevice.FriendlyName ?? bridgeDevice.IeeeAddress,
                 $"{Zigbee2MqttChannels.DeviceChannel}/{bridgeDevice.IeeeAddress}");
@@ -294,52 +298,65 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             {
                 deviceConfig.Model = bridgeDevice.Definition.Model;
                 deviceConfig.Manufacturer = bridgeDevice.Definition.Vendor;
+            }
 
-                if (bridgeDevice.Definition.Exposes != null)
+            await this.deviceDiscoverHandler.HandleAsync(deviceConfig, cancellationToken);
+
+            // Discover contacts
+            if (bridgeDevice.Definition is { Exposes: { } })
+            {
+                var contacts = new List<DeviceContact>();
+                foreach (var feature in bridgeDevice.Definition.Exposes.SelectMany(e =>
+                    new List<BridgeDeviceExposeFeature>(e.Features ??
+                                                        Enumerable.Empty<BridgeDeviceExposeFeature>()) {e}))
                 {
-                    var contacts = new List<DeviceContact>();
-                    foreach (var feature in bridgeDevice.Definition.Exposes.SelectMany(e =>
-                        new List<BridgeDeviceExposeFeature>(e.Features ??
-                                                            Enumerable.Empty<BridgeDeviceExposeFeature>()) {e}))
+                    var name = feature.Property;
+                    var type = feature.Type;
+
+                    // Must have name and type
+                    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(type))
+                        continue;
+
+                    // Map zigbee2mqtt type to signal data type
+                    var dataType = MapZ2MTypeToDataType(type);
+                    if (string.IsNullOrWhiteSpace(dataType))
                     {
-                        var name = feature.Property;
-                        var type = feature.Type;
-
-                        // Must have name and type
-                        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(type))
-                            continue;
-
-                        // Map zigbee2mqtt type to signal data type
-                        var dataType = MapZ2MTypeToDataType(type);
-                        if (string.IsNullOrWhiteSpace(dataType))
-                        {
-                            this.logger.LogWarning(
-                                "Failed to map input {Input} type {Type} for device {DeviceIdentifier}", 
-                                name, type, deviceConfig.Identifier);
-                            continue;
-                        }
-
-                        var access = DeviceContactAccess.None;
-                        if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Readonly))
-                            access |= DeviceContactAccess.Read;
-                        if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Request))
-                            access |= DeviceContactAccess.Get;
-                        if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Write))
-                            access |= DeviceContactAccess.Write;
-                        contacts.Add(new DeviceContact(name, dataType, access));
+                        this.logger.LogWarning(
+                            "Failed to map input {Input} type {Type} for device {DeviceIdentifier}", 
+                            name, type, deviceConfig.Identifier);
+                        continue;
                     }
 
-                    if (contacts.Any())
+                    var access = DeviceContactAccess.None;
+                    if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Readonly))
+                        access |= DeviceContactAccess.Read;
+                    if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Request))
+                        access |= DeviceContactAccess.Get;
+                    if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Write))
+                        access |= DeviceContactAccess.Write;
+                    contacts.Add(new DeviceContact(name, dataType, access));
+                }
+
+                var device = await this.devicesDao.GetAsync(deviceConfig.Identifier, cancellationToken);
+                if (device == null)
+                {
+                    this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", deviceConfig.Identifier);
+                }
+                else
+                {
+                    foreach (var (name, dataType, deviceContactAccess) in contacts)
                     {
-                        deviceConfig.Endpoints = new List<DeviceEndpoint>
-                        {
-                            new(Zigbee2MqttChannels.DeviceChannel, contacts)
-                        };
+                        await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                                device,
+                                Zigbee2MqttChannels.DeviceChannel,
+                                name,
+                                c => c with { DataType = dataType, Access = deviceContactAccess }),
+                            cancellationToken);
                     }
                 }
             }
 
-            await this.deviceDiscoverHandler.HandleAsync(deviceConfig, cancellationToken);
+            // Refresh current states
             await this.RefreshDeviceAsync(deviceConfig.Identifier, cancellationToken);
         }
 

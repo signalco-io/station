@@ -7,7 +7,9 @@ namespace Signal.Beacon.Voice
     {
         public static IServiceCollection AddVoice(this IServiceCollection services)
         {
-            return services.AddSingleton<IWorkerService, VoiceService>();
+            return services
+                .AddTransient<SpeechResultEvaluator>()
+                .AddSingleton<IWorkerService, VoiceService>();
         }
     }
 }

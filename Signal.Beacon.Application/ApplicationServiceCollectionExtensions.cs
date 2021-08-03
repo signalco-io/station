@@ -25,6 +25,9 @@ namespace Signal.Beacon.Application
             services.AddSingleton<IConditionEvaluatorValueProvider, ConditionEvaluatorValueProvider>();
             services.AddTransient<ICommandHandler<DeviceStateSetCommand>, DevicesCommandHandler>();
             services.AddTransient<ICommandHandler<DeviceDiscoveredCommand>, DevicesCommandHandler>();
+            services.AddTransient<ICommandValueHandler<DeviceDiscoveredCommand, string>, DevicesCommandHandler>();
+            services.AddTransient<ICommandHandler<DeviceContactUpdateCommand>, DevicesCommandHandler>();
+            services.AddTransient<ICommandHandler<ConductPublishCommand>, ConductManager>();
             services.AddTransient<IProcessesService, ProcessesService>();
             services.AddSingleton<IDevicesDao, DevicesDao>();
             services.AddSingleton<IProcessesDao, ProcessesDao>();

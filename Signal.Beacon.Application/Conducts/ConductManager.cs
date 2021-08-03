@@ -6,13 +6,14 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Application.PubSub;
 using Signal.Beacon.Application.Signal.SignalR;
+using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Structures.Queues;
 
 namespace Signal.Beacon.Application.Conducts
 {
-    internal class ConductManager : IConductManager
+    internal class ConductManager : IConductManager, ICommandHandler<ConductPublishCommand>
     {
         private readonly IPubSubTopicHub<Conduct> conductHub;
         private readonly ISignalSignalRConductsHubClient signalRConductsHubClient;
@@ -32,6 +33,9 @@ namespace Signal.Beacon.Application.Conducts
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
+
+        public async Task HandleAsync(ConductPublishCommand command, CancellationToken cancellationToken) => 
+            await this.PublishAsync(command.Conducts, cancellationToken);
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {

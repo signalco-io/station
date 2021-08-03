@@ -11,8 +11,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Architecture;
+using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Workers;
@@ -33,10 +35,13 @@ namespace Signal.Beacon.Channel.iRobot
         private readonly IMacLookupService macLookupService;
         private readonly ILogger<iRobotWorkerService> logger;
         private readonly IMqttClientFactory mqttClientFactory;
-        private readonly ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler;
+        private readonly IDevicesDao devicesDao;
+        private readonly ICommandValueHandler<DeviceDiscoveredCommand, string> discoverCommandHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateSetHandler;
+        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
+        private readonly IConductSubscriberClient conductSubscriberClient;
         private CancellationToken startCancellationToken;
-        private iRobotWorkerServiceConfiguration configuration;
+        private iRobotWorkerServiceConfiguration? configuration;
         private readonly Dictionary<string, IMqttClient> roombaClients = new();
 
         public iRobotWorkerService(
@@ -44,8 +49,11 @@ namespace Signal.Beacon.Channel.iRobot
             IHostInfoService hostInfoService,
             IMacLookupService macLookupService,
             IMqttClientFactory mqttClientFactory,
-            ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler,
+            IDevicesDao devicesDao,
+            ICommandValueHandler<DeviceDiscoveredCommand, string> discoverCommandHandler,
             ICommandHandler<DeviceStateSetCommand> deviceStateSetHandler,
+            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
+            IConductSubscriberClient conductSubscriberClient,
             ILogger<iRobotWorkerService> logger)
         {
             this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
@@ -53,8 +61,11 @@ namespace Signal.Beacon.Channel.iRobot
             this.macLookupService = macLookupService ?? throw new ArgumentNullException(nameof(macLookupService));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.mqttClientFactory = mqttClientFactory ?? throw new ArgumentNullException(nameof(mqttClientFactory));
+            this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
             this.discoverCommandHandler = discoverCommandHandler ?? throw new ArgumentNullException(nameof(discoverCommandHandler));
             this.deviceStateSetHandler = deviceStateSetHandler ?? throw new ArgumentNullException(nameof(deviceStateSetHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
+            this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
         }
 
 
@@ -66,9 +77,31 @@ namespace Signal.Beacon.Channel.iRobot
                     ConfigurationFileName,
                     cancellationToken);
 
+            this.conductSubscriberClient.Subscribe(iRobotChannels.RoombaChannel, ConductHandler);
+
             if (!this.configuration.RoombaRobots.Any())
                 _ = this.DiscoverDevicesAsync();
             else this.configuration.RoombaRobots.ForEach((c) => _ = this.ConnectToRoomba(c));
+        }
+
+        private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
+        {
+            var robotId = conduct.Target.Identifier;
+
+            switch (conduct.Target.Contact)
+            {
+                case "cleanArea":
+                    await this.SendRoombaCleanAreaAsync(robotId, "ikBwaAEXSCSGjwCFqogY8g", "0", "210502T130902");
+                    break;
+                case "dock":
+                    await this.SendRoombaCommandAsync(robotId, "dock");
+                    break;
+                case "pause":
+                    await this.SendRoombaCommandAsync(robotId, "pause");
+                    break;
+                default:
+                    throw new NotSupportedException("Invalid conduct contact.");
+            }
         }
 
         private async Task ConnectToRoomba(iRobotWorkerServiceConfiguration.RoombaConfiguration config)
@@ -84,6 +117,7 @@ namespace Signal.Beacon.Channel.iRobot
 
                 var client = this.mqttClientFactory.Create();
                 client.OnMessage += this.RoombaOnAnyMessage;
+                client.OnUnavailable += (_, _) => this.RoombaUnavailable(config);
                 this.roombaClients.Add(config.RobotId, client);
 
                 // Start communication
@@ -96,24 +130,61 @@ namespace Signal.Beacon.Channel.iRobot
                     config.RobotPassword, 
                     true);
                 
-                // TODO: Rediscover if unable to connect after some period
-
                 // Discover push to Signal
-                await this.discoverCommandHandler.HandleAsync(new DeviceDiscoveredCommand(
-                    "iRobot Robot", config.RobotId,
-                    new List<DeviceEndpoint>
-                    {
-                        new(iRobotChannels.RoombaChannel, new List<DeviceContact>
+                var deviceId = await this.discoverCommandHandler.HandleAsync(
+                    new DeviceDiscoveredCommand("iRobot Robot", config.RobotId), 
+                    this.startCancellationToken);
+
+                // Retrieve device
+                var device = await this.devicesDao.GetByIdAsync(deviceId, this.startCancellationToken);
+                if (device == null) 
+                    throw new Exception($"Device with {deviceId} not found.");
+                
+                // Update contacts
+                await this.deviceContactUpdateHandler.HandleManyAsync(
+                    this.startCancellationToken,
+                    new DeviceContactUpdateCommand(deviceId, iRobotChannels.RoombaChannel,
+                        device.ContactOrDefault(iRobotChannels.RoombaChannel, "cycle") with
                         {
-                            new("cycle", "enum", DeviceContactAccess.Get),
-                            new("phase", "enum", DeviceContactAccess.Get),
-                            new("battery", "double", DeviceContactAccess.Get),
-                            new("cleanall", "action", DeviceContactAccess.Write),
-                            new("cleanArea", "action", DeviceContactAccess.Write),
-                            new("pause", "action", DeviceContactAccess.Write),
-                            new("dock", "action", DeviceContactAccess.Write)
-                        })
-                    }), this.startCancellationToken);
+                            DataType = "enum",
+                            Access = DeviceContactAccess.Get
+                        }),
+                    new DeviceContactUpdateCommand(deviceId, iRobotChannels.RoombaChannel,
+                        device.ContactOrDefault(iRobotChannels.RoombaChannel, "phase") with
+                        {
+                            DataType = "enum",
+                            Access = DeviceContactAccess.Get
+                        }),
+                    new DeviceContactUpdateCommand(deviceId, iRobotChannels.RoombaChannel,
+                        device.ContactOrDefault(iRobotChannels.RoombaChannel, "battery") with
+                        {
+                            DataType = "double",
+                            Access = DeviceContactAccess.Get
+                        }),
+                    new DeviceContactUpdateCommand(deviceId, iRobotChannels.RoombaChannel,
+                        device.ContactOrDefault(iRobotChannels.RoombaChannel, "cleanAll") with
+                        {
+                            DataType = "action",
+                            Access = DeviceContactAccess.Write
+                        }),
+                    new DeviceContactUpdateCommand(deviceId, iRobotChannels.RoombaChannel,
+                        device.ContactOrDefault(iRobotChannels.RoombaChannel, "cleanArea") with
+                        {
+                            DataType = "action",
+                            Access = DeviceContactAccess.Write
+                        }),
+                    new DeviceContactUpdateCommand(deviceId, iRobotChannels.RoombaChannel,
+                        device.ContactOrDefault(iRobotChannels.RoombaChannel, "pause") with
+                        {
+                            DataType = "action",
+                            Access = DeviceContactAccess.Write
+                        }),
+                    new DeviceContactUpdateCommand(deviceId, iRobotChannels.RoombaChannel,
+                        device.ContactOrDefault(iRobotChannels.RoombaChannel, "dock") with
+                        {
+                            DataType = "action",
+                            Access = DeviceContactAccess.Write
+                        }));
             }
             catch (Exception ex)
             {
@@ -121,7 +192,59 @@ namespace Signal.Beacon.Channel.iRobot
                 this.logger.LogWarning("Failed to connect to Roomba.");
             }
         }
-        
+
+        private async void RoombaUnavailable(iRobotWorkerServiceConfiguration.RoombaConfiguration config)
+        {
+            await this.DisconnectRoombaClientAsync(config.RobotId);
+
+            // Find new potential devices and match to existing physical address
+            var potentialDevices = await this.GetPotentialRoombaDevicesAsync(this.startCancellationToken);
+            var matchedDevice = potentialDevices
+                .Select(pd => pd.physicalAddress)
+                .FirstOrDefault(pa => pa == config.PhysicalAddress);
+
+            // Handle device not matched on network
+            if (matchedDevice == null)
+            {
+                this.logger.LogWarning("Didn't find Roomba device {RobotId} on network. Will retry again soon...", config.RobotId);
+                await Task.Delay(TimeSpan.FromMinutes(1), this.startCancellationToken);
+                _ = this.ConnectToRoomba(config);
+                return;
+            }
+
+            // Assign new IP address
+            config.IpAddress = potentialDevices.First(d => d.physicalAddress == config.PhysicalAddress).ipAddress;
+
+            // Save updated configuration
+            await this.configurationService.SaveAsync(
+                ConfigurationFileName,
+                this.configuration,
+                this.startCancellationToken);
+
+            // Connect to robot
+            _ = this.ConnectToRoomba(config);
+        }
+
+        private async Task DisconnectRoombaClientAsync(string robotId)
+        {
+            if (!this.roombaClients.TryGetValue(robotId, out var client))
+                return;
+
+            // Dispose client
+            try
+            {
+                await client.StopAsync(this.startCancellationToken);
+                client.Dispose();
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(ex, "Failed to stop and dispose MQTT client.");
+            }
+
+            // Remove client
+            this.roombaClients.Remove(robotId);
+        }
+
         private async void RoombaOnAnyMessage(object? _, MqttMessage message)
         {
             if (!message.Topic.Contains("/shadow/update")) return;
@@ -139,6 +262,47 @@ namespace Signal.Beacon.Channel.iRobot
 
             if (status.State.Reported.Pose != null)
                 this.UpdateRoombaPose(robotId, status.State.Reported.Pose);
+
+            // Assign DataValues to Area contacts
+            var newZoneIds = status.State.Reported.LastCommand?.Regions?
+                .Where(r => !string.IsNullOrWhiteSpace(r.RegionId) && !string.IsNullOrWhiteSpace(r.Type) && r.Type == "zid")
+                .Select(r => r.RegionId)
+                .Select(newRoomId =>
+                    new DeviceContactDataValue(
+                        $"{status.State.Reported.LastCommand.MapId}-{status.State.Reported.LastCommand.UserMapId}-zid-{newRoomId}",
+                        $"Zone {newRoomId}"))
+                .ToList() ?? new List<DeviceContactDataValue>();
+            var newRoomIds = status.State.Reported.LastCommand?.Regions?
+                .Where(r => !string.IsNullOrWhiteSpace(r.RegionId) && !string.IsNullOrWhiteSpace(r.Type) && r.Type == "rid")
+                .Select(r => r.RegionId!)
+                .Select(newRoomId =>
+                    new DeviceContactDataValue(
+                        $"{status.State.Reported.LastCommand.MapId}-{status.State.Reported.LastCommand.UserMapId}-rid-{newRoomId}",
+                        $"Room {newRoomId}")
+                )
+                .ToList() ?? new List<DeviceContactDataValue>();
+
+            // We need map identifier and any region in command
+            if (status.State.Reported.LastCommand != null && (
+                newZoneIds.Any() || newRoomIds.Any()))
+            {
+                var device = await this.devicesDao.GetAsync(robotId, this.startCancellationToken);
+                var cleanAreaContact = device?.Contact(iRobotChannels.RoombaChannel, "cleanArea");
+                if (device != null && 
+                    cleanAreaContact != null)
+                {
+                    // Construct new collection of data values
+                    var newDataValues = new List<DeviceContactDataValue>(cleanAreaContact.DataValues ?? new List<DeviceContactDataValue>());
+                    newDataValues.AddRange(newRoomIds.Union(newZoneIds)
+                        .Where(t => !(cleanAreaContact.DataValues?.Any(dv => dv.Value == t.Value) ?? false))
+                        .ToList());
+
+                    await this.deviceContactUpdateHandler.HandleAsync(
+                        new DeviceContactUpdateCommand(device.Id, iRobotChannels.RoombaChannel,
+                            cleanAreaContact with { DataValues = newDataValues }),
+                        this.startCancellationToken);
+                }
+            }
         }
 
         private async Task UpdateRoombaMissionAsync(string robotId, RoombaMqttStatusDto.StateDto.ReportedDto.CleanMissionStatusDto mission)
@@ -155,20 +319,45 @@ namespace Signal.Beacon.Channel.iRobot
         private void UpdateRoombaPose(string robotId, RoombaMqttStatusDto.StateDto.ReportedDto.PoseDto pose)
         {
             // TODO: Persist pose
+            this.logger.LogTrace($"Robot {robotId} pose (not persisted): {pose}");
         }
 
-        private Task SendRoombaCommandAsync()
+        private async Task SendRoombaCommandAsync(string robotId, string command)
         {
-            throw new NotImplementedException();
-            //var command = "dock"; // or start
-            //var topic = "cmd";
-            //var data = new
-            //{
-            //    command = command,
-            //    time = ((DateTime.UtcNow.Ticks - 621355968000000000) / 10000) / 1000 | 0,
-            //    initiator = "localApp"
-            //};
-            //await client.PublishAsync(topic, data);
+            var client = this.roombaClients[robotId];
+
+            var data = new
+            {
+                command,
+                time = (DateTime.UtcNow.Ticks - 621355968000000000) / 10000 / 1000 | 0,
+                initiator = "localApp"
+            };
+
+            await client.PublishAsync("cmd", data);
+        }
+
+        private async Task SendRoombaCleanAreaAsync(string robotId, string mapId, string regionId, string userMapId)
+        {
+            var client = this.roombaClients[robotId];
+
+            var data = new
+            {
+                command = "start",
+                initiator = "localApp",
+                time = (DateTime.UtcNow.Ticks - 621355968000000000) / 10000 / 1000 | 0,
+                pmap_id = mapId,
+                regions = new[] {
+                    new
+                    {
+                        region_id = regionId,
+                        type = "zid"
+                    }
+                },
+                user_pmapv_id = userMapId,
+                ordered = 1
+            };
+
+            await client.PublishAsync("cmd", data);
         }
 
         private async Task AuthenticateRoombaAsync(string ipAddress, string physicalAddress, string robotId)
@@ -262,12 +451,15 @@ namespace Signal.Beacon.Channel.iRobot
             }
         }
 
-        private async Task DiscoverDevicesAsync()
+        private async Task<List<(string ipAddress, string physicalAddress)>> GetPotentialRoombaDevicesAsync(
+            CancellationToken cancellationToken)
         {
             var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
             var matchedHosts =
-                await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8883}, this.startCancellationToken);
+                await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] { 8883 }, cancellationToken);
             var hostsWithPort = matchedHosts.Where(mh => mh.OpenPorts.Count() == 1);
+
+            var potentialDevices = new List<(string ipAddress, string physicalAddress)>();
             foreach (var hostInfo in hostsWithPort)
             {
                 if (string.IsNullOrWhiteSpace(hostInfo.PhysicalAddress))
@@ -277,8 +469,7 @@ namespace Signal.Beacon.Channel.iRobot
                 }
 
                 // Validate MAC vendor
-                var deviceCompany =
-                    await this.macLookupService.CompanyNameLookupAsync(hostInfo.PhysicalAddress, this.startCancellationToken);
+                var deviceCompany = await this.macLookupService.CompanyNameLookupAsync(hostInfo.PhysicalAddress, cancellationToken);
                 if (!this.allowedMacCompanies.Contains(deviceCompany))
                 {
                     this.logger.LogDebug(
@@ -292,9 +483,16 @@ namespace Signal.Beacon.Channel.iRobot
                     "Potential iRobot device found on address \"{DeviceIp}\" (\"{PhysicalAddress}\")",
                     hostInfo.IpAddress, hostInfo.PhysicalAddress);
 
-                // Try to connect
-                await this.DiscoverDeviceAsync(hostInfo.IpAddress, hostInfo.PhysicalAddress);
+                potentialDevices.Add((hostInfo.IpAddress, hostInfo.PhysicalAddress));
             }
+            return potentialDevices;
+        }
+
+        private async Task DiscoverDevicesAsync()
+        {
+            // Try to connect to all potential devices
+            foreach (var potentialDevice in await this.GetPotentialRoombaDevicesAsync(this.startCancellationToken))
+                await this.DiscoverDeviceAsync(potentialDevice.ipAddress, potentialDevice.physicalAddress);
         }
 
         private async Task DiscoverDeviceAsync(string ipAddress, string physicalAddress)
@@ -360,7 +558,7 @@ namespace Signal.Beacon.Channel.iRobot
                 this.RobotPassword = robotPassword;
             }
 
-            public string IpAddress { get; }
+            public string IpAddress { get; set; }
 
             public string PhysicalAddress { get; }
 
@@ -429,12 +627,14 @@ namespace Signal.Beacon.Channel.iRobot
                     [JsonPropertyName("notReady")] public int? NotReady { get; set; }
                 }
 
+                [Serializable]
                 public class PoseDto
                 {
                     [JsonPropertyName("theta")] public double? Theta { get; set; }
 
                     [JsonPropertyName("point")] public PointDto? Point { get; set; }
 
+                    [Serializable]
                     public class PointDto
                     {
                         [JsonPropertyName("x")] public double? X { get; set; }

@@ -24,7 +24,7 @@ namespace Signal.Beacon.Application.Signal
             this.client = client ?? throw new ArgumentNullException(nameof(client));
         }
 
-        public async Task<IEnumerable<DeviceConfiguration>> GetDevicesAsync(CancellationToken cancellationToken)
+        public async Task<IEnumerable<DeviceWithState>> GetDevicesAsync(CancellationToken cancellationToken)
         {
             var response = await this.client.GetAsync<IEnumerable<SignalDeviceDto>>(
                 SignalApiDevicesGetUrl,
@@ -32,15 +32,33 @@ namespace Signal.Beacon.Application.Signal
             if (response == null)
                 throw new Exception("Failed to retrieve devices from API.");
 
-            return response.Select(d => new DeviceConfiguration(
-                d.Id ?? throw new InvalidOperationException(),
-                d.Alias ?? throw new InvalidOperationException(),
-                d.DeviceIdentifier ?? throw new InvalidOperationException(),
-                MapEndpointsFromDto(d.Endpoints ?? Enumerable.Empty<SignalDeviceEndpointDto>()))
+            return response.Select(d =>
             {
-                Manufacturer = d.Manufacturer,
-                Model = d.Model
+                var endpoints = MapEndpointsFromDto(d.Endpoints ?? Enumerable.Empty<SignalDeviceEndpointDto>());
+                return new DeviceWithState(
+                    d.Id ?? throw new InvalidOperationException(),
+                    d.Alias ?? throw new InvalidOperationException(),
+                    d.DeviceIdentifier ?? throw new InvalidOperationException(),
+                    endpoints)
+                {
+                    Manufacturer = d.Manufacturer,
+                    Model = d.Model,
+                    States = d.States?.Select(ds => (
+                                 new DeviceTarget(ds.Channel, d.DeviceIdentifier, ds.Name),
+                                 DeserializeValue(ds.ValueSerialized))) ??
+                             new List<(DeviceTarget contact, object? value)>()
+                };
             });
+        }
+
+        private static object? DeserializeValue(string? valueSerialized)
+        {
+            if (valueSerialized == null) return null;
+            if (valueSerialized.ToLowerInvariant() == "true") return true;
+            if (valueSerialized.ToLowerInvariant() == "false") return false;
+            if (double.TryParse(valueSerialized, out var valueDouble))
+                return valueDouble;
+            return valueSerialized;
         }
 
         public async Task UpdateDeviceInfoAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken)
@@ -55,13 +73,13 @@ namespace Signal.Beacon.Application.Signal
                 cancellationToken);
         }
 
-        public async Task UpdateDeviceEndpointsAsync(string deviceId, DeviceDiscoveredCommand command, CancellationToken cancellationToken)
+        public async Task UpdateDeviceEndpointsAsync(string deviceId, IEnumerable<DeviceEndpoint> endpoints, CancellationToken cancellationToken)
         {
             await this.client.PostAsJsonAsync(
                 SignalApiDevicesEndpointsUpdateUrl,
                 new SignalDeviceEndpointsUpdateDto(
                     deviceId,
-                    MapEndpointsToDto(command.Endpoints)),
+                    MapEndpointsToDto(endpoints)),
                 cancellationToken);
         }
 
@@ -72,7 +90,6 @@ namespace Signal.Beacon.Application.Signal
                 new SignalDeviceRegisterDto(
                     discoveredDevice.Identifier,
                     discoveredDevice.Alias,
-                    MapEndpointsToDto(discoveredDevice.Endpoints),
                     discoveredDevice.Manufacturer,
                     discoveredDevice.Model),
                 cancellationToken);
@@ -88,7 +105,8 @@ namespace Signal.Beacon.Application.Signal
             endpoints.Select(e => new DeviceEndpoint(e.Channel, e.Contacts.Select(c =>
                 new DeviceContact(c.Name, c.DataType, (DeviceContactAccess) c.Access)
                 {
-                    NoiseReductionDelta = c.NoiseReductionDelta
+                    NoiseReductionDelta = c.NoiseReductionDelta,
+                    DataValues = c.DataValues?.Select(dv=> new DeviceContactDataValue(dv.Value, dv.Label))
                 })));
 
         private static IEnumerable<SignalDeviceEndpointDto> MapEndpointsToDto(IEnumerable<DeviceEndpoint> endpoints) =>
@@ -98,8 +116,9 @@ namespace Signal.Beacon.Application.Signal
                     e.Contacts.Select(c => new SignalDeviceEndpointContactDto(
                         c.Name,
                         c.DataType,
-                        (SignalDeviceEndpointContactAccessDto) c.Access,
-                        c.NoiseReductionDelta))));
+                        (SignalDeviceEndpointContactAccessDto)c.Access,
+                        c.NoiseReductionDelta,
+                        c.DataValues?.Select(dv => new SignalDeviceEndpointContactDataValueDto(dv.Value, dv.Label))))));
 
         public async Task DevicesPublishStateAsync(string deviceId, DeviceTarget target, object? value, DateTime timeStamp, CancellationToken cancellationToken)
         {

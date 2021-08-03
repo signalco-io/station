@@ -18,6 +18,6 @@
 
         public PhilipsHueLightState State { get; }
 
-        public record PhilipsHueLightState(bool On);
+        public record PhilipsHueLightState(bool On, double? Temperature, double? Brightness);
     }
 }

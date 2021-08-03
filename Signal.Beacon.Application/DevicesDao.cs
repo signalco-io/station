@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Devices;
-using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Signal;
 using Signal.Beacon.Core.Values;
 
@@ -18,7 +17,7 @@ namespace Signal.Beacon.Application
         private readonly ILogger<DevicesDao> logger;
         private Dictionary<string, DeviceConfiguration>? devices;
         private readonly object cacheLock = new();
-        private Task<IEnumerable<DeviceConfiguration>>? getDevicesTask;
+        private Task<IEnumerable<DeviceWithState>>? getDevicesTask;
 
         public DevicesDao(
             ISignalDevicesClient devicesClient,
@@ -72,19 +71,9 @@ namespace Signal.Beacon.Application
 
             return this.devices?.Values.AsEnumerable() ?? Enumerable.Empty<DeviceConfiguration>();
         }
-
-        public Task<IEnumerable<IHistoricalValue>?> GetStateHistoryAsync(DeviceContactTarget deviceTarget, DateTime startTimeStamp, DateTime endTimeStamp, CancellationToken cancellationToken) => 
-            this.deviceStateManager.Value.GetStateHistoryAsync(deviceTarget, startTimeStamp, endTimeStamp);
-
-        public Task<object?> GetStateAsync(DeviceContactTarget deviceTarget, CancellationToken cancellationToken) => 
+        
+        public Task<object?> GetStateAsync(DeviceTarget deviceTarget, CancellationToken cancellationToken) => 
             this.deviceStateManager.Value.GetStateAsync(deviceTarget);
-
-        public async Task UpdateDeviceAsync(string identifier, DeviceConfiguration deviceConfiguration, CancellationToken cancellationToken)
-        {
-            await this.CacheDevicesAsync(cancellationToken);
-
-            this.devices?.AddOrSet(identifier, deviceConfiguration);
-        }
 
         private async Task CacheDevicesAsync(CancellationToken cancellationToken)
         {
@@ -106,7 +95,19 @@ namespace Signal.Beacon.Application
                     {
                         this.devices = new Dictionary<string, DeviceConfiguration>();
                         foreach (var deviceConfiguration in remoteDevices)
+                        {
                             this.devices.Add(deviceConfiguration.Identifier, deviceConfiguration);
+
+                            // Set local state
+                            if (this.deviceStateManager.Value is DeviceStateManager localDeviceStateManager)
+                                foreach (var retrievedState in deviceConfiguration.States)
+                                    localDeviceStateManager.SetLocalState(
+                                        new DeviceTarget(
+                                            retrievedState.contact.Channel,
+                                            deviceConfiguration.Identifier,
+                                            retrievedState.contact.Contact),
+                                        retrievedState.value);
+                        }
                     }
                     finally
                     {

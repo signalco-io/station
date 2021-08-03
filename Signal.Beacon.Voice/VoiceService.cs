@@ -1,19 +1,127 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Google.Cloud.Speech.V1;
+using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using OpenTK.Audio.OpenAL;
 using Pv;
+using Signal.Beacon.Core.Architecture;
+using Signal.Beacon.Core.Conducts;
+using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Workers;
 
 namespace Signal.Beacon.Voice
 {
+    public class SpeechResultEvaluator
+    {
+        private readonly ICommandHandler<ConductPublishCommand> publishConduct;
+        private readonly IDevicesDao devicesDao;
+        private readonly ILogger<SpeechResultEvaluator> logger;
+
+
+        public SpeechResultEvaluator(
+            ICommandHandler<ConductPublishCommand> publishConduct,
+            IDevicesDao devicesDao,
+            ILogger<SpeechResultEvaluator> logger)
+        {
+            this.publishConduct = publishConduct ?? throw new ArgumentNullException(nameof(publishConduct));
+            this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+
+        public async Task EvaluateResultAsync(SpeechResult result, CancellationToken cancellationToken)
+        {
+            // Check confidence
+            if (result.Confidence < 0.75)
+            {
+                this.logger.LogTrace("Confidence too low for result: {@Result}", result);
+                return;
+            }
+
+            // Remove language specific characters
+            var decomposed = result.Transcript.Normalize(NormalizationForm.FormD);
+            var filtered = decomposed.Where(c => char.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark);
+            var transcriptFiltered = new string(filtered.ToArray());
+
+            // TODO: Load language dictionary
+            var nonCategorizedWords = new List<string>();
+            var questionWords = new List<string> { "koliko", "zasto", "kako", "da li", "je li", "hoce li" };
+            var actionPositive = new List<string> { "ukljuci", "upali", "aktiviraj" };
+            var actionNegative = new List<string> { "iskljuci", "ugasi", "deaktiviraj" };
+            // TODO: Load device localized tags
+            var entityType = new List<string>
+            {
+
+            };
+            // TODO: Load areas localized
+            var areas = new List<string> {  };
+
+            var tokens = nonCategorizedWords
+                .Union(questionWords)
+                .Union(actionPositive)
+                .Union(actionNegative)
+                .Union(entityType)
+                .Union(areas)
+                .ToList();
+
+            var tokenized = this.Tokenize(transcriptFiltered, tokens).ToList();
+
+            var devices = (await this.devicesDao.GetAllAsync(cancellationToken)).ToList();
+            var deviceNames = devices.Select(d => d.Alias).ToList();
+
+            var matches = FuzzySharp.Process
+                .ExtractTop(
+                    result.Transcript,
+                    deviceNames)
+                .ToList();
+
+            var matchedDevice = devices[matches[0].Index];
+        }
+
+        private IEnumerable<string> Tokenize(string query, List<string> tokens)
+        {
+            var maxWords = tokens.Max(t => t.Count(tc => tc == ' ') + 1);
+
+            var words = query
+                .Split(new[] { " ", "-", ",", "!", "?", ";", ":" }, StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
+
+            // Go through all words
+            for (int i = 0; i < words.Count; i++)
+            {
+                // Match longest word-chain first
+                for (int size = maxWords - 1; size >= 0; size--)
+                {
+                    // Check out of bounds
+                    if (i + size < words.Count)
+                    {
+                        // Construct word-chain
+                        var wordChain = string.Join(" ", words.Skip(i).Take(size + 1));
+
+                        // Try matching with tokens
+                        var wordChainScore = FuzzySharp.Process.ExtractOne(wordChain, tokens, cutoff: 90);
+                        if (wordChainScore is { Index: >= 0 })
+                        {
+                            yield return wordChain;
+                            i += Math.Max(0, size - 1);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public class SpeechScene
     {
         public string Name { get; init; }
@@ -21,30 +129,197 @@ namespace Signal.Beacon.Voice
         public Dictionary<string, float> HotWords { get; } = new();
     }
 
-    public class VoiceService : IWorkerService, IDisposable
+    public record SpeechResult(string Transcript, double Confidence);
+
+    public record SpeechResults(IEnumerable<SpeechResult> Results);
+
+    public class GoogleSttClient
     {
-        private readonly ILogger<VoiceService> logger;
+        private readonly GetNextFrameByteDelegate nextFrame;
+        private readonly ILogger<GoogleSttClient> logger;
+        private SpeechClient? client;
+        private SpeechClient.StreamingRecognizeStream? recognitionStream;
+        private StreamingRecognitionConfig? streamConfig;
+
+        public GoogleSttClient(GetNextFrameByteDelegate nextFrame, ILogger<GoogleSttClient> logger)
+        {
+            this.nextFrame = nextFrame ?? throw new ArgumentNullException(nameof(nextFrame));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public void Initialize()
+        {
+            // Create stream config
+            if (this.streamConfig == null) { 
+                this.streamConfig = new StreamingRecognitionConfig
+                {
+                    Config = new RecognitionConfig
+                    {
+                        Encoding = RecognitionConfig.Types.AudioEncoding.Linear16,
+                        LanguageCode = "hr-HR",
+                        SampleRateHertz = 16000,
+                        EnableAutomaticPunctuation = true
+                    }
+                };
+            }
+
+            // Create client
+            if (this.client == null)
+                this.client = SpeechClient.Create();
+        }
+
+        public async Task<SpeechResults?> ProcessAsync(CancellationToken cancellationToken)
+        {
+            var processCts = new CancellationTokenSource();
+
+            try 
+            { 
+                // Begin streaming
+                if (this.client == null ||
+                    this.streamConfig == null)
+                    throw new Exception("Initialize client before requesting processing.");
+                this.recognitionStream = this.client.StreamingRecognize();
+                await this.recognitionStream.WriteAsync(new StreamingRecognizeRequest
+                {
+                    StreamingConfig = this.streamConfig
+                });
+
+                // Writing and reading thread
+                var writingTask = Task.Run(() => this.WritingThreadAsync(processCts.Token), cancellationToken);
+
+                var results = new List<SpeechResult>();
+                await foreach (var result in this.ReadingThread()) 
+                { 
+                    results.Add(result);
+                    break;
+                }
+
+                // Stop writing
+                processCts.Cancel();
+                await writingTask;
+
+                return new SpeechResults(results);
+            }
+            catch(Exception ex)
+            {
+                this.logger.LogWarning(ex, "Failed to process speech.");
+            }
+            finally
+            {
+                if (!processCts.IsCancellationRequested)
+                    processCts.Cancel();
+            }
+
+            return null;
+        }
+
+        private async Task WritingThreadAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                byte[] buffer = new byte[1024];
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    if (this.nextFrame(512, ref buffer))
+                    {
+                        // Send audio data
+                        await this.SendFrameAsync(buffer);
+                    }
+
+                    // Wait a bit for next frame
+                    Thread.Sleep(20);
+                }
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(ex, "Streaming audio from input device failed.");
+                throw;
+            }
+        }
+
+        private async IAsyncEnumerable<SpeechResult> ReadingThread()
+        {
+            if (this.recognitionStream == null) 
+                throw new Exception("Initialize regognition stream before starting reading thread");
+
+            // Read responses
+            await foreach (var response in this.recognitionStream.GetResponseStream())
+            {
+                this.logger.LogTrace("Response {@Response}", response);
+
+                if (response.Error != null)
+                {
+                    this.HandleResponseError();
+                    break;
+                }
+
+                var finalResponse = response.Results.FirstOrDefault(r => r.IsFinal);
+                if (finalResponse != null)
+                {
+                    foreach (var alternative in finalResponse.Alternatives)
+                        yield return new SpeechResult(alternative.Transcript, alternative.Confidence);
+                }                    
+            }
+        }
+
+        private void HandleResponseError()
+        {
+            throw new NotImplementedException();
+        }
+
+        private async Task CompleteAsync()
+        {
+            if (this.recognitionStream == null) 
+                return;
+
+            await this.recognitionStream.TryWriteCompleteAsync();
+        }
+
+        private async Task SendFrameAsync(byte[] audioData)
+        {
+            // Ignore if stream not started
+            if (this.recognitionStream == null) 
+                return;
+
+            await this.recognitionStream.TryWriteAsync(new StreamingRecognizeRequest
+            {
+                AudioContent = ByteString.CopyFrom(audioData)
+            });
+        }
+    }
+
+    public delegate bool GetNextFrameByteDelegate(int frameLength, ref byte[] buffer);
+
+    public delegate bool GetNextFrameShortDelegate(int frameLength, ref short[] buffer);
+
+    public class PorcupineWakeWordClient : IDisposable
+    {
+        private readonly GetNextFrameShortDelegate nextFrame;
+        private readonly ILogger<PorcupineWakeWordClient> logger;
 
         private Porcupine? porcupine;
         private short[]? porcupineRecordingBuffer;
         private const float PorcupineSensitivity = 0.7f;
         private const string PorcupineModelFilePath = @"lib\common\porcupine_params.pv";
 
-        private readonly List<SpeechScene> speechScenes = new();
-
-        private ALCaptureDevice? captureDevice;
-
-        private readonly List<AlSound> sounds = new();
-        private ALContext? alContext;
-        private int? alSource;
-
-
-        public VoiceService(ILogger<VoiceService> logger)
+        public PorcupineWakeWordClient(
+            GetNextFrameShortDelegate nextFrame,
+            ILogger<PorcupineWakeWordClient> logger)
         {
+            this.nextFrame = nextFrame ?? throw new ArgumentNullException(nameof(nextFrame));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        private void InitializePorcupine()
+        // TODO: Deduplicate (original in VoiceService)
+        private static string ExecutingLocation()
+        {
+            var executingLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            if (executingLocation == null)
+                throw new Exception("Couldn't determine application executing location.");
+            return executingLocation;
+        }
+
+        public void InitializePorcupine()
         {
             var executionLocation = ExecutingLocation();
             var porcupineVersion = typeof(Porcupine).Assembly.GetName().Version;
@@ -71,7 +346,7 @@ namespace Signal.Beacon.Voice
             this.porcupineRecordingBuffer = new short[this.porcupine.FrameLength];
         }
 
-        private void WaitForWakeWord(CancellationToken cancellationToken)
+        public void WaitForWakeWord(CancellationToken cancellationToken)
         {
             if (this.porcupine == null)
                 throw new NullReferenceException("Porcupine is null. Initialize first.");
@@ -80,7 +355,7 @@ namespace Signal.Beacon.Voice
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (this.GetNextFrame(this.porcupine.FrameLength, ref this.porcupineRecordingBuffer))
+                if (this.nextFrame(this.porcupine.FrameLength, ref this.porcupineRecordingBuffer))
                 {
                     if (this.porcupine.Process(this.porcupineRecordingBuffer) >= 0)
                         return;
@@ -88,6 +363,45 @@ namespace Signal.Beacon.Voice
 
                 Thread.Sleep(20);
             }
+        }
+
+        public void Dispose()
+        {
+            this.porcupine?.Dispose();
+        }
+    }
+
+    public class VoiceService : IWorkerService, IDisposable
+    {
+        private readonly ILogger<VoiceService> logger;
+
+        private readonly PorcupineWakeWordClient wakeWord;
+        private readonly GoogleSttClient stt;
+
+        private readonly List<SpeechScene> speechScenes = new();
+        private ALCaptureDevice? captureDevice;
+
+        private readonly List<AlSound> sounds = new();
+        private ALContext? alContext;
+        private int? alSource;
+
+        private readonly SpeechResultEvaluator evaluator;
+
+
+        public VoiceService(
+            SpeechResultEvaluator speechResultEvaluator,
+            ILogger<VoiceService> logger, 
+            ILoggerFactory loggerFactory)
+        {
+            this.evaluator = speechResultEvaluator ?? throw new ArgumentNullException(nameof(speechResultEvaluator));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+            this.wakeWord = new PorcupineWakeWordClient(
+                this.GetNextFrame,
+                loggerFactory.CreateLogger<PorcupineWakeWordClient>());
+            this.stt = new GoogleSttClient(
+                this.GetNextFrameByte,
+                loggerFactory.CreateLogger<GoogleSttClient>());
         }
 
         private void RegisterSpeechScene(SpeechScene scene)
@@ -172,25 +486,39 @@ namespace Signal.Beacon.Voice
             this.captureDevice = null;
         }
 
+        private bool GetNextFrameByte(int frameLength, ref byte[] buffer)
+        {
+            if (this.captureDevice == null)
+                throw new NullReferenceException("Capture device not initialized.");
+            if (frameLength <= 0) throw new ArgumentOutOfRangeException(nameof(frameLength));
+
+            if (ALC.GetAvailableSamples(this.captureDevice.Value) < frameLength)
+                return false;
+
+            if (buffer == null) throw new ArgumentNullException(nameof(buffer));
+            if (buffer.Length < frameLength)
+                throw new ArgumentOutOfRangeException(nameof(buffer), "Buffer smaller than frame length.");
+
+            ALC.CaptureSamples(this.captureDevice.Value, ref buffer[0], frameLength);
+            this.AlHasError();
+            return true;
+        }
+
         private bool GetNextFrame(int frameLength, ref short[] buffer)
         {
             if (this.captureDevice == null)
                 throw new NullReferenceException("Capture device not initialized.");
             if (frameLength <= 0) throw new ArgumentOutOfRangeException(nameof(frameLength));
+
+            if (ALC.GetAvailableSamples(this.captureDevice.Value) < frameLength)
+                return false;
+
             if (buffer == null) throw new ArgumentNullException(nameof(buffer));
             if (buffer.Length < frameLength)
                 throw new ArgumentOutOfRangeException(nameof(buffer), "Buffer smaller than frame length.");
 
-            if (ALC.GetAvailableSamples(this.captureDevice.Value) < frameLength) 
-                return false;
-
             ALC.CaptureSamples(this.captureDevice.Value, ref buffer[0], frameLength);
-
-            //for (var i = 0; i < buffer.Length; i++)
-            //{
-            //    buffer[i] = (short)Math.Min(short.MaxValue, Math.Max(short.MinValue, buffer[i] * 10));
-            //}
-
+            this.AlHasError();
             return true;
         }
         
@@ -262,7 +590,8 @@ namespace Signal.Beacon.Voice
             {
                 try
                 {
-                    this.InitializePorcupine();
+                    this.wakeWord.InitializePorcupine();
+                    this.stt.Initialize();
                     this.InitializeSounds();
 
                     await this.PlaySoundAsync("Hello.");
@@ -281,17 +610,29 @@ namespace Signal.Beacon.Voice
 
                     while (!cancellationToken.IsCancellationRequested)
                     {
-                        this.WaitForWakeWord(cancellationToken);
+                        this.wakeWord.WaitForWakeWord(cancellationToken);
                         if (cancellationToken.IsCancellationRequested)
                             break;
 
                         _ = this.PlaySoundAsync("wake");
                         //var result = this.ProcessDeepSpeech(cancellationToken);
-                        var result = string.Empty;
+                        //var result = string.Empty;
+                        var results = await this.stt.ProcessAsync(cancellationToken);
 
-                        _ = this.PlaySoundAsync(string.IsNullOrWhiteSpace(result)
-                            ? "error"
-                            : "accept");
+                        if (results == null || !results.Results.Any()) 
+                        { 
+                            _ = this.PlaySoundAsync("error");
+                        }
+                        else
+                        {
+                            foreach(var result in results.Results.OrderBy(r => r.Confidence))
+                            {
+                                if (await this.TryProcessResultAsync(result, cancellationToken))
+                                    break;
+                            }
+
+                            _ = this.PlaySoundAsync("error");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -301,6 +642,15 @@ namespace Signal.Beacon.Voice
             }, cancellationToken);
 
             return Task.CompletedTask;
+        }
+
+        private async Task<bool> TryProcessResultAsync(SpeechResult result, CancellationToken cancellationToken)
+        {
+            this.logger.LogTrace("Processing result: {@Result}", result);
+
+            await this.evaluator.EvaluateResultAsync(result, cancellationToken);
+
+            return false;
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
@@ -524,7 +874,7 @@ namespace Signal.Beacon.Voice
         {
             this.logger.LogDebug("Disposing Porcupine...");
 
-            this.porcupine?.Dispose();
+            this.wakeWord?.Dispose();
         }
     }
 }

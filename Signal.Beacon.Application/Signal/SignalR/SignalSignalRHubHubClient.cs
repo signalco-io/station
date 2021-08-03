@@ -39,7 +39,8 @@ namespace Signal.Beacon.Application.Signal.SignalR
                 throw new ArgumentException("Value cannot be null or whitespace.", nameof(hubName));
 
             // Already started check
-            if (this.isStarted) return;
+            if (this.isStarted) 
+                return;
 
             // Locked start flag
             lock (this.startLock)
@@ -85,9 +86,9 @@ namespace Signal.Beacon.Application.Signal.SignalR
                     return Task.CompletedTask;
                 };
 
-                this.connection.Closed += error => {
+                this.connection.Closed += async error => {
                     this.logger.LogInformation(error, "{HubName} hub connection closed", hubName);
-                    return Task.CompletedTask;
+                    await this.ReconnectDelayedAsync(hubName, cancellationToken);
                 };
 
                 // Start the connection
@@ -96,7 +97,16 @@ namespace Signal.Beacon.Application.Signal.SignalR
             catch (Exception ex)
             {
                 this.logger.LogWarning(ex, $"Failed to start Signal SignalR {hubName} hub");
+
+                await this.ReconnectDelayedAsync(hubName, cancellationToken);
             }
+        }
+
+        private async Task ReconnectDelayedAsync(string hubName, CancellationToken cancellationToken)
+        {
+            this.isStarted = false;
+            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            _ = this.StartAsync(hubName, cancellationToken);
         }
     }
 }

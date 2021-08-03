@@ -26,6 +26,7 @@ namespace Signal.Beacon.Channel.Samsung
         private readonly IMacLookupService macLookupService;
         private readonly IConfigurationService configurationService;
         private readonly IConductSubscriberClient conductSubscriberClient;
+        private readonly IDevicesDao devicesDao;
         private readonly ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> stateSetCommandHandler;
         private readonly ILogger<SamsungWorkerService> logger;
@@ -38,6 +39,7 @@ namespace Signal.Beacon.Channel.Samsung
             IMacLookupService macLookupService,
             IConfigurationService configurationService,
             IConductSubscriberClient conductSubscriberClient,
+            IDevicesDao devicesDao,
             ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler,
             ICommandHandler<DeviceStateSetCommand> stateSetCommandHandler,
             ILogger<SamsungWorkerService> logger)
@@ -46,6 +48,7 @@ namespace Signal.Beacon.Channel.Samsung
             this.macLookupService = macLookupService ?? throw new ArgumentNullException(nameof(macLookupService));
             this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
             this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
+            this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
             this.discoverCommandHandler = discoverCommandHandler ?? throw new ArgumentNullException(nameof(discoverCommandHandler));
             this.stateSetCommandHandler = stateSetCommandHandler ?? throw new ArgumentNullException(nameof(stateSetCommandHandler));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -134,12 +137,12 @@ namespace Signal.Beacon.Channel.Samsung
 
         private void ConnectTv(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig remoteConfig)
         {
-            var remote = new TvRemote(remoteConfig, this.logger);
+            var remote = new TvRemote(this.devicesDao, remoteConfig, this.logger);
             remote.OnDiscover += (_, command) =>
                 this.discoverCommandHandler.HandleAsync(command, this.startCancellationToken);
             remote.OnState += (_, command) =>
                 this.stateSetCommandHandler.HandleAsync(command, this.startCancellationToken);
-            remote.BeginConnectTv();
+            remote.BeginConnectTv(this.startCancellationToken);
             this.tvRemotes.Add(remote);
         }
 
