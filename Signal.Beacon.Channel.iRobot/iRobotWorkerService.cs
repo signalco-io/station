@@ -5,11 +5,11 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
@@ -18,6 +18,7 @@ using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Workers;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Signal.Beacon.Channel.iRobot
 {
@@ -91,7 +92,25 @@ namespace Signal.Beacon.Channel.iRobot
             switch (conduct.Target.Contact)
             {
                 case "cleanArea":
-                    await this.SendRoombaCleanAreaAsync(robotId, "ikBwaAEXSCSGjwCFqogY8g", "0", "210502T130902");
+                    var areas = JsonConvert.DeserializeObject<IEnumerable<string>>(
+                        conduct.Value.ToString() ??
+                        throw new InvalidOperationException("Expected array of data values."));
+
+                    var mapId = "";
+                    var userMapId = "";
+                    var regions = new List<(string regionId, string type)>();
+                    foreach (var area in areas)
+                    {
+                        var valueSplit = area.Split("-");
+                        if (valueSplit.Length < 4)
+                            throw new Exception("Invalid conduct value. Expected mapId, userMapId, type and regionId separated by '-'.");
+
+                        mapId = valueSplit[0];
+                        userMapId = valueSplit[1];
+                        regions.Add((valueSplit[3], valueSplit[2]));
+                    }
+
+                    await this.SendRoombaCleanAreaAsync(robotId, mapId, userMapId, regions);
                     break;
                 case "dock":
                     await this.SendRoombaCommandAsync(robotId, "dock");
@@ -336,7 +355,7 @@ namespace Signal.Beacon.Channel.iRobot
             await client.PublishAsync("cmd", data);
         }
 
-        private async Task SendRoombaCleanAreaAsync(string robotId, string mapId, string regionId, string userMapId)
+        private async Task SendRoombaCleanAreaAsync(string robotId, string mapId, string userMapId, IEnumerable<(string regionId, string type)> regions)
         {
             var client = this.roombaClients[robotId];
 
@@ -346,13 +365,7 @@ namespace Signal.Beacon.Channel.iRobot
                 initiator = "localApp",
                 time = (DateTime.UtcNow.Ticks - 621355968000000000) / 10000 / 1000 | 0,
                 pmap_id = mapId,
-                regions = new[] {
-                    new
-                    {
-                        region_id = regionId,
-                        type = "zid"
-                    }
-                },
+                regions = regions.Select(r => new { region_id = r.regionId, r.type }),
                 user_pmapv_id = userMapId,
                 ordered = 1
             };
