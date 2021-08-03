@@ -153,16 +153,35 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
 
         private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
         {
-            if (conduct.Target == null)
+            var device = await this.devicesDao.GetAsync(conduct.Target.Identifier, cancellationToken);
+            if (device == null)
             {
-                this.logger.LogWarning("Conduct contact is null. Conduct: {@Conduct}", conduct);
+                this.logger.LogWarning("Conduct device not found. {@Conduct}", conduct);
                 return;
+            }
+
+            var contact = device.Contact(conduct.Target.Channel, conduct.Target.Contact);
+            if (contact == null)
+            {
+                this.logger.LogWarning("Conduct contact not found on device. {@Conduct}", conduct);
+                return;
+            }
+
+            string? value = null;
+            if (contact.DataType == "enum" ||
+                contact.DataType == "double")
+            {
+                value = conduct.Value.ToString() ?? null;
+            }
+            else if (contact.DataType == "bool")
+            {
+                value = conduct.Value.ToString()?.ToLowerInvariant() == "true" ? "ON" : "OFF";
             }
 
             await this.PublishStateAsync(
                 conduct.Target.Identifier,
                 conduct.Target.Contact,
-                conduct.Value.ToString()?.ToLowerInvariant() == "true" ? "ON" : "OFF",
+                value,
                 cancellationToken);
         }
 
@@ -302,13 +321,17 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
 
             await this.deviceDiscoverHandler.HandleAsync(deviceConfig, cancellationToken);
 
-            // Discover contacts
-            if (bridgeDevice.Definition is { Exposes: { } })
+            // Retrieve discovered device
+            var device = await this.devicesDao.GetAsync(deviceConfig.Identifier, cancellationToken);
+            if (device == null)
             {
-                var contacts = new List<DeviceContact>();
+                this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", deviceConfig.Identifier);
+            }
+            else if (bridgeDevice.Definition is { Exposes: { } })
+            {
                 foreach (var feature in bridgeDevice.Definition.Exposes.SelectMany(e =>
                     new List<BridgeDeviceExposeFeature>(e.Features ??
-                                                        Enumerable.Empty<BridgeDeviceExposeFeature>()) {e}))
+                                                        Enumerable.Empty<BridgeDeviceExposeFeature>()) { e }))
                 {
                     var name = feature.Property;
                     var type = feature.Type;
@@ -322,7 +345,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
                     if (string.IsNullOrWhiteSpace(dataType))
                     {
                         this.logger.LogWarning(
-                            "Failed to map input {Input} type {Type} for device {DeviceIdentifier}", 
+                            "Failed to map input {Input} type {Type} for device {DeviceIdentifier}",
                             name, type, deviceConfig.Identifier);
                         continue;
                     }
@@ -334,25 +357,28 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
                         access |= DeviceContactAccess.Get;
                     if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Write))
                         access |= DeviceContactAccess.Write;
-                    contacts.Add(new DeviceContact(name, dataType, access));
-                }
 
-                var device = await this.devicesDao.GetAsync(deviceConfig.Identifier, cancellationToken);
-                if (device == null)
-                {
-                    this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", deviceConfig.Identifier);
-                }
-                else
-                {
-                    foreach (var (name, dataType, deviceContactAccess) in contacts)
-                    {
-                        await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
-                                device,
-                                Zigbee2MqttChannels.DeviceChannel,
-                                name,
-                                c => c with { DataType = dataType, Access = deviceContactAccess }),
-                            cancellationToken);
-                    }
+                    var dataValues = feature.Values?.ToList();
+
+                    // Update contact basic information
+                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                            device,
+                            Zigbee2MqttChannels.DeviceChannel,
+                            name,
+                            c =>
+                            {
+                                var existingDataValues = new List<DeviceContactDataValue>(c.DataValues ?? Enumerable.Empty<DeviceContactDataValue>());
+
+                                // Reassign old value labels
+                                var newDataValues = dataValues?.Select(dv =>
+                                                        new DeviceContactDataValue(dv,
+                                                            existingDataValues.FirstOrDefault(edv => edv.Value == dv)
+                                                                ?.Label)) ??
+                                                    existingDataValues;
+
+                                return c with { DataType = dataType, Access = access, DataValues = newDataValues};
+                            }),
+                        cancellationToken);
                 }
             }
 
@@ -394,7 +420,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             }
         }
 
-        private async Task PublishStateAsync(string deviceIdentifier, string contactName, string value, CancellationToken cancellationToken)
+        private async Task PublishStateAsync(string deviceIdentifier, string contactName, string? value, CancellationToken cancellationToken)
         {
             try
             {
@@ -442,7 +468,7 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             {
                 "binary" => "bool",
                 "numeric" => "double",
-                "enum" => "string",
+                "enum" => "enum",
                 _ => null
             };
     }
