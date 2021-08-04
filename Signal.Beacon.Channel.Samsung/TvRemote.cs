@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -32,6 +34,38 @@ namespace Signal.Beacon.Channel.Samsung
         public event EventHandler<DeviceDiscoveredCommand>? OnDiscover;
         public event EventHandler<DeviceContactUpdateCommand>? OnContactUpdate;  
         public event EventHandler<DeviceStateSetCommand>? OnState;
+
+        public IEnumerable<string> remoteKeysList = new List<string>
+        {
+            "KEY_MENU",
+            "KEY_HOME",
+            "KEY_VOLUP",
+            "KEY_VOLDOWN",
+            "KEY_MUTE",
+            "KEY_POWER",
+            "KEY_GUIDE",
+            "KEY_CHUP",
+            "KEY_CHDOWN",
+            "KEY_CH_LIST",
+            "KEY_PRECH",
+            "KEY_LEFT",
+            "KEY_RIGHT",
+            "KEY_UP",
+            "KEY_DOWN",
+            "KEY_ENTER",
+            "KEY_RETURN",
+            "KEY_TOOLS",
+            "KEY_1",
+            "KEY_2",
+            "KEY_3",
+            "KEY_4",
+            "KEY_5",
+            "KEY_6",
+            "KEY_7",
+            "KEY_8",
+            "KEY_9",
+            "KEY_0"
+        };
 
 
         public TvRemote(
@@ -192,10 +226,20 @@ namespace Signal.Beacon.Channel.Samsung
                     device, SamsungChannels.SamsungChannel, "state",
                     c => c with { DataType = "bool", Access = DeviceContactAccess.Read | DeviceContactAccess.Write }));
 
-                // TODO: Assign keyboard to DataValues
                 this.OnContactUpdate?.Invoke(this, DeviceContactUpdateCommand.FromDevice(
-                    device, SamsungChannels.SamsungChannel, "remote_key",
-                    c => c with { DataType = "action", Access = DeviceContactAccess.Read }));
+                    device, SamsungChannels.SamsungChannel, "keypress",
+                    c =>
+                    {
+                        // TODO: Move this logic to shared method (MergeDataValues)
+                        var existingDataValues = new List<DeviceContactDataValue>(c.DataValues ?? Enumerable.Empty<DeviceContactDataValue>());
+
+                        // Reassign old value labels
+                        var newDataValues = this.remoteKeysList.Select(dv =>
+                            new DeviceContactDataValue(dv,
+                                existingDataValues.FirstOrDefault(edv => edv.Value == dv)?.Label));
+
+                        return c with { DataType = "action", Access = DeviceContactAccess.Write, DataValues = newDataValues };
+                    }));
 
                 this.isDiscovered = true;
             }

@@ -29,6 +29,7 @@ namespace Signal.Beacon.Channel.Samsung
         private readonly IDevicesDao devicesDao;
         private readonly ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> stateSetCommandHandler;
+        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
         private readonly ILogger<SamsungWorkerService> logger;
         private SamsungWorkerServiceConfiguration? configuration;
         private readonly List<TvRemote> tvRemotes = new();
@@ -42,6 +43,7 @@ namespace Signal.Beacon.Channel.Samsung
             IDevicesDao devicesDao,
             ICommandHandler<DeviceDiscoveredCommand> discoverCommandHandler,
             ICommandHandler<DeviceStateSetCommand> stateSetCommandHandler,
+            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
             ILogger<SamsungWorkerService> logger)
         {
             this.hostInfoService = hostInfoService ?? throw new ArgumentNullException(nameof(hostInfoService));
@@ -51,6 +53,7 @@ namespace Signal.Beacon.Channel.Samsung
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
             this.discoverCommandHandler = discoverCommandHandler ?? throw new ArgumentNullException(nameof(discoverCommandHandler));
             this.stateSetCommandHandler = stateSetCommandHandler ?? throw new ArgumentNullException(nameof(stateSetCommandHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -140,6 +143,8 @@ namespace Signal.Beacon.Channel.Samsung
             var remote = new TvRemote(this.devicesDao, remoteConfig, this.logger);
             remote.OnDiscover += (_, command) =>
                 this.discoverCommandHandler.HandleAsync(command, this.startCancellationToken);
+            remote.OnContactUpdate += (_, command) =>
+                this.deviceContactUpdateHandler.HandleAsync(command, this.startCancellationToken);
             remote.OnState += (_, command) =>
                 this.stateSetCommandHandler.HandleAsync(command, this.startCancellationToken);
             remote.BeginConnectTv(this.startCancellationToken);
