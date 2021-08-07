@@ -9,7 +9,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
@@ -22,6 +21,7 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Signal.Beacon.Channel.iRobot
 {
+    // ReSharper disable once InconsistentNaming
     internal class iRobotWorkerService : IWorkerService
     {
         private const string ConfigurationFileName = "iRobot.json";
@@ -92,9 +92,10 @@ namespace Signal.Beacon.Channel.iRobot
             switch (conduct.Target.Contact)
             {
                 case "cleanArea":
-                    var areas = JsonConvert.DeserializeObject<IEnumerable<string>>(
-                        conduct.Value.ToString() ??
-                        throw new InvalidOperationException("Expected array of data values."));
+                    var areas = JsonSerializer.Deserialize<IEnumerable<string>>(
+                                    conduct.Value.ToString() ??
+                                    throw new InvalidOperationException("Expected array of data values.")) ??
+                                throw new Exception("Failed to deserialize areas.");
 
                     var mapId = "";
                     var userMapId = "";
@@ -283,42 +284,27 @@ namespace Signal.Beacon.Channel.iRobot
                 this.UpdateRoombaPose(robotId, status.State.Reported.Pose);
 
             // Assign DataValues to Area contacts
-            var newZoneIds = status.State.Reported.LastCommand?.Regions?
-                .Where(r => !string.IsNullOrWhiteSpace(r.RegionId) && !string.IsNullOrWhiteSpace(r.Type) && r.Type == "zid")
-                .Select(r => r.RegionId)
+            var newRegionDataValues = status.State.Reported.LastCommand?.Regions?
+                .Where(r => !string.IsNullOrWhiteSpace(r.RegionId) && !string.IsNullOrWhiteSpace(r.Type))
+                .Select(r => (r.RegionId, r.Type))
                 .Select(newRoomId =>
                     new DeviceContactDataValue(
-                        $"{status.State.Reported.LastCommand.MapId}-{status.State.Reported.LastCommand.UserMapId}-zid-{newRoomId}",
-                        $"Zone {newRoomId}"))
-                .ToList() ?? new List<DeviceContactDataValue>();
-            var newRoomIds = status.State.Reported.LastCommand?.Regions?
-                .Where(r => !string.IsNullOrWhiteSpace(r.RegionId) && !string.IsNullOrWhiteSpace(r.Type) && r.Type == "rid")
-                .Select(r => r.RegionId!)
-                .Select(newRoomId =>
-                    new DeviceContactDataValue(
-                        $"{status.State.Reported.LastCommand.MapId}-{status.State.Reported.LastCommand.UserMapId}-rid-{newRoomId}",
-                        $"Room {newRoomId}")
-                )
+                        $"{status.State.Reported.LastCommand.MapId}-{status.State.Reported.LastCommand.UserMapId}-{newRoomId.Type}-{newRoomId.RegionId}",
+                        $"{(newRoomId.Type == "zid" ? "Zone" : "Room")} {newRoomId}"))
                 .ToList() ?? new List<DeviceContactDataValue>();
 
             // We need map identifier and any region in command
-            if (status.State.Reported.LastCommand != null && (
-                newZoneIds.Any() || newRoomIds.Any()))
+            if (status.State.Reported.LastCommand != null && newRegionDataValues.Any())
             {
                 var device = await this.devicesDao.GetAsync(robotId, this.startCancellationToken);
-                var cleanAreaContact = device?.Contact(iRobotChannels.RoombaChannel, "cleanArea");
-                if (device != null && 
-                    cleanAreaContact != null)
+                if (device != null)
                 {
-                    // Construct new collection of data values
-                    var newDataValues = new List<DeviceContactDataValue>(cleanAreaContact.DataValues ?? new List<DeviceContactDataValue>());
-                    newDataValues.AddRange(newRoomIds.Union(newZoneIds)
-                        .Where(t => !(cleanAreaContact.DataValues?.Any(dv => dv.Value == t.Value) ?? false))
-                        .ToList());
-
                     await this.deviceContactUpdateHandler.HandleAsync(
-                        new DeviceContactUpdateCommand(device.Id, iRobotChannels.RoombaChannel,
-                            cleanAreaContact with { DataValues = newDataValues }),
+                        DeviceContactUpdateCommand.FromDevice(
+                            device,
+                            iRobotChannels.RoombaChannel,
+                            "cleanArea",
+                            c => c with {DataValues = c.MergeDataValues(newRegionDataValues, i => i.Value, i => i.Label)}), 
                         this.startCancellationToken);
                 }
             }
@@ -586,16 +572,19 @@ namespace Signal.Beacon.Channel.iRobot
         public const string RoombaChannel = "irobot";
     }
 
+    [Serializable]
     internal class RoombaMqttStatusDto
     {
         [JsonPropertyName("state")]
         public StateDto? State { get; set; }
 
+        [Serializable]
         public class StateDto
         {
             [JsonPropertyName("reported")]
             public ReportedDto? Reported { get; set; }
 
+            [Serializable]
             public class ReportedDto
             {
                 [JsonPropertyName("name")] public string? Name { get; set; }
@@ -609,6 +598,7 @@ namespace Signal.Beacon.Channel.iRobot
 
                 [JsonPropertyName("lastCommand")] public LastCommandDto? LastCommand { get; set; }
 
+                [Serializable]
                 public class LastCommandDto
                 {
                     [JsonPropertyName("command")] public string? Command { get; set; }
@@ -621,6 +611,7 @@ namespace Signal.Beacon.Channel.iRobot
 
                     [JsonPropertyName("user_pmapv_id")] public string? UserMapId { get; set; }
 
+                    [Serializable]
                     public class RegionDto
                     {
                         [JsonPropertyName("region_id")] public string? RegionId { get; set; }
@@ -629,6 +620,7 @@ namespace Signal.Beacon.Channel.iRobot
                     }
                 }
 
+                [Serializable]
                 public class CleanMissionStatusDto
                 {
                     [JsonPropertyName("cycle")] public string? Cycle { get; set; }
@@ -658,33 +650,8 @@ namespace Signal.Beacon.Channel.iRobot
             }
         }
     }
-
-    internal class RoombaSmartMap
-    {
-        public RoombaSmartMap(string id)
-        {
-            this.Id = id;
-        }
-
-        public string Id { get; }
-
-        public List<Area>? Rooms { get; set; } = new();
-
-        public List<Area>? Zones { get; set; } = new();
-
-        public class Area
-        {
-            public Area(string id)
-            {
-                this.Id = id;
-            }
-
-            public string Id { get; }
-
-            public string? Name { get; set; }
-        }
-    }
-
+    
+    // TODO Separate robot from worker service
     internal class RoombaControl
     {
         private readonly iRobotWorkerServiceConfiguration.RoombaConfiguration config;

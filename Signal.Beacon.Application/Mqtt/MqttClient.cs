@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -15,10 +13,7 @@ using MQTTnet.Client.Connecting;
 using MQTTnet.Client.Disconnecting;
 using MQTTnet.Client.Options;
 using MQTTnet.Extensions.ManagedClient;
-using MQTTnet.Formatter;
-using MQTTnet.Protocol;
 using MQTTnet.Server;
-using Newtonsoft.Json;
 using Signal.Beacon.Core.Mqtt;
 using IMqttClient = Signal.Beacon.Core.Mqtt.IMqttClient;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -30,14 +25,14 @@ namespace Signal.Beacon.Application.Mqtt
         private readonly ILogger<MqttClient> logger;
         private IManagedMqttClient? mqttClient;
 
-        private string? clientName;
+        private string? assignedClientName;
 
         private readonly Dictionary<string, List<Func<MqttMessage, Task>>> subscriptions = new();
 
         public event EventHandler<MqttMessage>? OnMessage;
 
         private const int UnavailableConnectionFailedThreshold = 5;
-        private int connectionFailedCounter = 0;
+        private int connectionFailedCounter;
         public event EventHandler? OnUnavailable;
 
 
@@ -60,7 +55,7 @@ namespace Signal.Beacon.Application.Mqtt
             if (this.mqttClient != null)
                 throw new Exception("Can't start client twice.");
 
-            this.clientName = clientName;
+            this.assignedClientName = clientName;
 
             try
             {
@@ -100,12 +95,12 @@ namespace Signal.Beacon.Application.Mqtt
             }
             catch (SocketException ex) when (ex.SocketErrorCode == SocketError.HostNotFound)
             {
-                this.logger.LogError("Unable to resolve MQTT host {ClientName}: {HostAddress}", this.clientName, hostAddress);
+                this.logger.LogError("Unable to resolve MQTT host {ClientName}: {HostAddress}", this.assignedClientName, hostAddress);
                 throw;
             }
             catch (Exception ex)
             {
-                this.logger.LogError(ex, "Failed to start MQTT client {ClientName}.", this.clientName);
+                this.logger.LogError(ex, "Failed to start MQTT client {ClientName}.", this.assignedClientName);
                 throw;
             }
         }
@@ -125,7 +120,7 @@ namespace Signal.Beacon.Application.Mqtt
             if (!this.subscriptions.ContainsKey(topic))
             {
                 this.subscriptions.Add(topic, new List<Func<MqttMessage, Task>>());
-                this.logger.LogDebug("{ClientName} Subscribed to topic: {Topic}", this.clientName, topic);
+                this.logger.LogDebug("{ClientName} Subscribed to topic: {Topic}", this.assignedClientName, topic);
             }
 
             this.subscriptions[topic].Add(handler);
@@ -149,13 +144,13 @@ namespace Signal.Beacon.Application.Mqtt
                     .Build());
 
             this.logger.LogTrace("{ClientName} Topic {Topic}, Response: ({StatusCode}) {Response}",
-                this.clientName, topic, result.ReasonCode, result.ReasonString);
+                this.assignedClientName, topic, result.ReasonCode, result.ReasonString);
         }
 
         private async Task MessageHandler(MqttApplicationMessageReceivedEventArgs arg)
         {
             var message = new MqttMessage(this, arg.ApplicationMessage.Topic, Encoding.ASCII.GetString(arg.ApplicationMessage.Payload), arg.ApplicationMessage.Payload);
-            this.logger.LogTrace("{ClientName} Topic {Topic}, Payload: {Payload}", this.clientName, message.Topic, message.Payload);
+            this.logger.LogTrace("{ClientName} Topic {Topic}, Payload: {Payload}", this.assignedClientName, message.Topic, message.Payload);
 
             this.OnMessage?.Invoke(this, message);
 
@@ -169,7 +164,7 @@ namespace Signal.Beacon.Application.Mqtt
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogWarning(ex, "{ClientName} Queue subscriber threw exception while processing message.", this.clientName);
+                    this.logger.LogWarning(ex, "{ClientName} Queue subscriber threw exception while processing message.", this.assignedClientName);
                 }
             }
         }
@@ -185,14 +180,14 @@ namespace Signal.Beacon.Application.Mqtt
                 this.connectionFailedCounter = int.MinValue;
             }
 
-            this.logger.LogInformation(arg.Exception, "MQTT connection closed {ClientName}.", this.clientName);
+            this.logger.LogInformation(arg.Exception, "MQTT connection closed {ClientName}.", this.assignedClientName);
             return Task.CompletedTask;
         }
 
         private Task ConnectedHandler(MqttClientConnectedEventArgs arg)
         {
             this.connectionFailedCounter = 0;
-            this.logger.LogInformation("MQTT connected {ClientName}.", this.clientName);
+            this.logger.LogInformation("MQTT connected {ClientName}.", this.assignedClientName);
             return Task.CompletedTask;
         }
         

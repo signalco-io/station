@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Signal.Beacon.Application.Auth0;
 using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Core.Configuration;
@@ -56,7 +56,7 @@ namespace Signal.Beacon
                     // Authorize Beacon
                     var deviceCodeResponse = await new Auth0DeviceAuthorization().GetDeviceCodeAsync(stoppingToken);
                     this.logger.LogInformation("Device auth: {Response}",
-                        JsonConvert.SerializeObject(deviceCodeResponse));
+                        JsonSerializer.Serialize(deviceCodeResponse));
                     
                     // TODO: Post device flow request to user (CTA)
                     

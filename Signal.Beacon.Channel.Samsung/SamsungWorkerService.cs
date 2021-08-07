@@ -80,22 +80,31 @@ namespace Signal.Beacon.Channel.Samsung
             if (matchedRemote == null)
                 throw new Exception($"No matching remote found for target {conduct.Target.Identifier}");
 
-            if (conduct.Target.Contact == "keypress")
+            switch (conduct.Target.Contact)
             {
-                matchedRemote.KeyPress(conduct.Value.ToString() ??
-                                       throw new ArgumentException($"Invalid conduct value ${conduct.Value}"));
-            } else if (conduct.Target.Contact == "state")
-            {
-                var boolString = conduct.Value.ToString()?.ToLowerInvariant();
-                if (boolString != "true" && boolString != "false")
-                    throw new Exception("Invalid contact value type. Expected boolean.");
+                case "keypress":
+                    matchedRemote.KeyPress(conduct.Value.ToString() ??
+                                           throw new ArgumentException($"Invalid conduct value ${conduct.Value}"));
+                    break;
+                case "openApp":
+                    matchedRemote.OpenApp(conduct.Value.ToString() ??
+                                          throw new ArgumentException($"Invalid conduct value ${conduct.Value}"));
+                    break;
+                case "state":
+                {
+                    var boolString = conduct.Value.ToString()?.ToLowerInvariant();
+                    if (boolString != "true" && boolString != "false")
+                        throw new Exception("Invalid contact value type. Expected boolean.");
 
-                // To turn on use WOL, to turn off use power key
-                if (boolString == "true")
-                    matchedRemote.WakeOnLan();
-                else matchedRemote.KeyPress("KEY_POWER");
+                    // To turn on use WOL, to turn off use power key
+                    if (boolString == "true")
+                        matchedRemote.WakeOnLan();
+                    else matchedRemote.KeyPress("KEY_POWER");
+                    break;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException($"Unsupported contact {conduct.Target.Contact}");
             }
-            else throw new ArgumentOutOfRangeException($"Unsupported contact {conduct.Target.Contact}");
 
             return Task.CompletedTask;
         }
