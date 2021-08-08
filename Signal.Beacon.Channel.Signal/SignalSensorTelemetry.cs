@@ -1,10 +1,23 @@
-﻿using System.Text.Json.Serialization;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Signal.Beacon.Channel.Signal
 {
-    public class SignalSensorTelemetry
+    [Serializable]
+    internal class SignalSensorTelemetryDto
     {
-        [JsonPropertyName("locked")]
-        public bool Locked { get; set; }
+        [JsonPropertyName("contacts")]
+        public IEnumerable<ValueDto>? Contacts { get; set; }
+
+        [Serializable]
+        public class ValueDto
+        {
+            [JsonPropertyName("contact")]
+            public string? ContactName { get; set; }
+
+            [JsonPropertyName("value")]
+            public string? ValueSerialized { get; set; }
+        }
     }
 }

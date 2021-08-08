@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Signal.Beacon.Core.Devices;
 
 namespace Signal.Beacon.Channel.Signal
 {
     [Serializable]
-    public class SignalDeviceConfig
+    internal class SignalDeviceConfig
     {
         [JsonPropertyName("api")]
         public string? Api { get; set; }
@@ -19,17 +20,17 @@ namespace Signal.Beacon.Channel.Signal
         [JsonPropertyName("epoch")]
         public int? Epoch { get; set; }
 
-        [JsonPropertyName("ip")]
-        public string? Ip { get; set; }
+        [JsonPropertyName("wifiIp")]
+        public string? WifiIp { get; set; }
 
         [JsonPropertyName("wifiAlive")]
         public bool? WifiAlive { get; set; }
 
-        [JsonPropertyName("ssid")]
-        public string? Ssid { get; set; }
+        [JsonPropertyName("wifiSsid")]
+        public string? WifiSsid { get; set; }
 
-        [JsonPropertyName("hostname")]
-        public string? Hostname { get; set; }
+        [JsonPropertyName("wifiHostname")]
+        public string? WifiHostname { get; set; }
 
         [JsonPropertyName("mqttAlive")]
         public bool? MqttAlive { get; set; }
@@ -40,38 +41,23 @@ namespace Signal.Beacon.Channel.Signal
         [JsonPropertyName("mqttTopic")]
         public string? MqttTopic { get; set; }
 
-        [JsonPropertyName("endpoints")]
-        public DeviceEndpoints? Endpoints { get; set; }
+        [JsonPropertyName("contacts")]
+        public List<Contact>? Contacts { get; set; }
 
         [Serializable]
-        public class DeviceEndpoints
+        public class Contact
         {
-            [JsonPropertyName("inputs")]
-            public List<Input>? Inputs { get; set; }
+            [JsonPropertyName("access")]
+            public DeviceContactAccess? Access { get; set; }
 
-            [JsonPropertyName("outputs")]
-            public List<Output>? Outputs { get; set; }
+            [JsonPropertyName("dataType")]
+            public string? DataType { get; set; }
 
-            public class Input
-            {
-                [JsonPropertyName("dataType")]
-                public string? DataType { get; set; }
+            [JsonPropertyName("name")]
+            public string? Name { get; set; }
 
-                [JsonPropertyName("name")]
-                public string? Name { get; set; }
-
-                [JsonPropertyName("value")]
-                public bool? Value { get; set; }
-            }
-
-            public class Output
-            {
-                [JsonPropertyName("dataType")]
-                public string? DataType { get; set; }
-
-                [JsonPropertyName("name")]
-                public string? Name { get; set; }
-            }
+            [JsonPropertyName("value")]
+            public bool? Value { get; set; }
         }
     }
 }

@@ -10,9 +10,7 @@ using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Devices;
-using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Mqtt;
-using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Workers;
 
 namespace Signal.Beacon.Channel.Signal
@@ -29,7 +27,6 @@ namespace Signal.Beacon.Channel.Signal
         private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
         private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
-        private readonly IHostInfoService hostInfoService;
         private readonly ILogger<SignalWorkerService> logger;
         private readonly List<IMqttClient> clients = new();
 
@@ -45,7 +42,6 @@ namespace Signal.Beacon.Channel.Signal
             ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
             ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
             ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
-            IHostInfoService hostInfoService,
             ILogger<SignalWorkerService> logger)
         {
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
@@ -56,7 +52,6 @@ namespace Signal.Beacon.Channel.Signal
             this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
             this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
             this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
-            this.hostInfoService = hostInfoService ?? throw new ArgumentNullException(nameof(hostInfoService));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -78,12 +73,6 @@ namespace Signal.Beacon.Channel.Signal
             }
 
             this.conductSubscriberClient.Subscribe(SignalChannels.DeviceChannel, this.ConductHandler);
-
-            // Cache local network devices
-            _ = this.hostInfoService.HostsAsync(
-                IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp()),
-                new[] {80, 443, 8080}, 
-                cancellationToken);
         }
 
         private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
@@ -105,6 +94,11 @@ namespace Signal.Beacon.Channel.Signal
         private async Task DiscoverDevicesAsync(MqttMessage message)
         {
             var config = JsonSerializer.Deserialize<SignalDeviceConfig>(message.Payload);
+            if (config == null)
+            {
+                this.logger.LogWarning("Device discovery message contains invalid configuration.");
+                return;
+            }
 
             var discoveryType = message.Topic.Split("/", StringSplitOptions.RemoveEmptyEntries).Last();
             if (discoveryType == "config")
@@ -116,22 +110,37 @@ namespace Signal.Beacon.Channel.Signal
                     // Signal new device discovered
                     await this.deviceDiscoveryHandler.HandleAsync(
                         new DeviceDiscoveredCommand(
-                            config.Hostname,
+                            config.WifiHostname ?? deviceIdentifier,
                             deviceIdentifier),
                         this.startCancellationToken);
 
-                    var device = await this.devicesDao.GetAsync(deviceIdentifier, this.startCancellationToken);
+                    // Configure contacts if available in config
+                    if (config.Contacts != null)
+                    {
+                        // Retrieve device
+                        var device = await this.devicesDao.GetAsync(deviceIdentifier, this.startCancellationToken);
+                        if (device == null)
+                            throw new Exception($"Device not found with identifier: {deviceIdentifier}");
 
-                    await this.deviceContactUpdateHandler.HandleManyAsync(
-                        this.startCancellationToken,
-                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "locked",
-                            c => c with { DataType = "bool", Access = DeviceContactAccess.Read }),
-                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "lock",
-                            c => c with { DataType = "action", Access = DeviceContactAccess.Write }),
-                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "unlock",
-                            c => c with { DataType = "action", Access = DeviceContactAccess.Write }),
-                        DeviceContactUpdateCommand.FromDevice(device, SignalChannels.DeviceChannel, "open",
-                            c => c with { DataType = "action", Access = DeviceContactAccess.Write }));
+                        foreach (var configContact in config.Contacts)
+                        {
+                            if (configContact.Name != null &&
+                                configContact.DataType != null)
+                            {
+                                await this.deviceContactUpdateHandler.HandleAsync(
+                                    DeviceContactUpdateCommand.FromDevice(
+                                        device,
+                                        SignalChannels.DeviceChannel,
+                                        configContact.Name,
+                                        c => c with
+                                        {
+                                            DataType = configContact.DataType,
+                                            Access = configContact.Access ?? DeviceContactAccess.None
+                                        }),
+                                    this.startCancellationToken);
+                            }
+                        }
+                    }
 
                     // Subscribe for device telemetry
                     var telemetrySubscribeTopic = $"signal/{config.MqttTopic}/#";
@@ -141,10 +150,10 @@ namespace Signal.Beacon.Channel.Signal
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogTrace(ex, "Failed to configure device {Name} ({Identifier})", config.Hostname,
-                        deviceIdentifier);
-                    this.logger.LogWarning("Failed to configure device {Name} ({Identifier})", config.Hostname,
-                        deviceIdentifier);
+                    this.logger.LogTrace(ex, "Failed to configure device {Name} ({Identifier})",
+                        config.WifiHostname, deviceIdentifier);
+                    this.logger.LogWarning("Failed to configure device {Name} ({Identifier})",
+                        config.WifiHostname, deviceIdentifier);
                 }
 
                 // Publish telemetry refresh request
@@ -154,15 +163,27 @@ namespace Signal.Beacon.Channel.Signal
 
         private async Task TelemetryHandlerAsync(string deviceIdentifier, MqttMessage message)
         {
+            // Check topic
             var isTelemetry = deviceIdentifier == message.Topic;
-            if (isTelemetry)
+            if (!isTelemetry)
+                return;
+
+            // Check contacts available
+            var telemetry = JsonSerializer.Deserialize<SignalSensorTelemetryDto>(message.Payload);
+            if (telemetry?.Contacts == null)
+                return;
+
+            // Process contacts
+            foreach (var telemetryContact in telemetry.Contacts)
             {
-                var telemetry = JsonSerializer.Deserialize<SignalSensorTelemetry>(message.Payload);
-                if (telemetry?.Locked != null)
+                if (telemetryContact.ContactName != null)
+                {
                     await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
-                            new DeviceTarget(SignalChannels.DeviceChannel, deviceIdentifier, "locked"),
-                            telemetry.Locked),
+                            new DeviceTarget(SignalChannels.DeviceChannel, deviceIdentifier,
+                                telemetryContact.ContactName),
+                            telemetryContact.ValueSerialized),
                         this.startCancellationToken);
+                }
             }
         }
 

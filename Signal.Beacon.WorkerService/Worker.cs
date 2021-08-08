@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Signal.Beacon.Application.Auth;
 using Signal.Beacon.Application.Auth0;
 using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Core.Configuration;
@@ -81,6 +82,8 @@ namespace Signal.Beacon
             {
                 this.signalClientAuthFlow.AssignToken(config.Token);
             }
+
+            this.signalClientAuthFlow.OnTokenRefreshed += SignalClientAuthFlowOnOnTokenRefreshed;
             
             // Start worker services
             await Task.WhenAll(this.workerServices.Value.Select(ws => this.StartWorkerService(ws, stoppingToken)));
@@ -92,6 +95,22 @@ namespace Signal.Beacon
 
             // Stop services
             await Task.WhenAll(this.workerServices.Value.Select(this.StopWorkerService));
+        }
+
+        private async void SignalClientAuthFlowOnOnTokenRefreshed(object? sender, AuthToken? e)
+        {
+            try
+            {
+                var config =
+                    await this.configurationService.LoadAsync<BeaconConfiguration>("Beacon.json",
+                        CancellationToken.None);
+                config.Token = e;
+                await this.configurationService.SaveAsync("Beacon.json", config, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(ex, "Failed to persist refreshed token.");
+            }
         }
 
         private Task StopWorkerService(IWorkerService workerService)

@@ -23,6 +23,7 @@ namespace Signal.Beacon.Application.Signal
         private AuthToken? token;
         private Task<SignalBeaconRefreshTokenResponseDto?>? renewTokenTask;
 
+        public event EventHandler<AuthToken?>? OnTokenRefreshed;
 
         public SignalClient(ILogger<SignalClient> logger)
         {
@@ -81,6 +82,9 @@ namespace Signal.Beacon.Application.Signal
             {
                 this.renewTokenTask = null;
             }
+
+            // Notify token was refreshed so it can be persisted
+            this.OnTokenRefreshed?.Invoke(this, await this.GetTokenAsync(cancellationToken));
         }
 
         public async Task PostAsJsonAsync<T>(string url, T data, CancellationToken cancellationToken)
