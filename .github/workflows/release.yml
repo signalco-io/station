@@ -23,7 +23,7 @@ jobs:
     - name: Publish
       run: |
         dotnet build --configuration Release --no-restore
-        dotnet publish .\Signal.Beacon.WorkerService\Signal.Beacon.csproj -c Release -o ./release/arm64 -r linux-arm64 --self-contained true
+        dotnet publish ./Signal.Beacon.WorkerService/Signal.Beacon.csproj -c Release -o ./release/arm64 -r linux-arm64 --self-contained true
     - name: Release
       uses: fnkr/github-action-ghr@v1
       env:
