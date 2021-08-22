@@ -77,12 +77,12 @@ namespace Signal.Beacon.Application.Signal.SignalR
                     .Build();
 
                 this.connection.Reconnecting += error => {
-                    this.logger.LogInformation(error, "{HubName}  hub connection - reconnecting...", hubName);
+                    this.logger.LogInformation(error, "{HubName} hub connection - reconnecting...", hubName);
                     return Task.CompletedTask;
                 };
 
-                this.connection.Reconnected += error => {
-                    this.logger.LogInformation(error, "{HubName}  hub connection reconnected", hubName);
+                this.connection.Reconnected += _ => {
+                    this.logger.LogInformation("{HubName} hub connection reconnected", hubName);
                     return Task.CompletedTask;
                 };
 
@@ -93,6 +93,8 @@ namespace Signal.Beacon.Application.Signal.SignalR
 
                 // Start the connection
                 await this.connection.StartAsync(this.StartCancellationToken.Value);
+
+                this.logger.LogInformation("{HubName} hub started", hubName);
             }
             catch (Exception ex)
             {
