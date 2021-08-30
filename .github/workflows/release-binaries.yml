@@ -1,6 +1,9 @@
-name: Publish Release Artifacts
+name: Publish Binaries
 
 on:
+  push:
+    tags:
+      - 'v*'
   release:
     types: [published]
 
