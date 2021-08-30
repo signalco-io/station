@@ -10,11 +10,11 @@ Commit messages need to contain semantic-release anotations in order to propperl
 
 The table below shows which commit message gets you which release type when `semantic-release` runs (using the default configuration):
 
-| Commit message                                                                                                                                                                                   | Release type               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| `fix(pencil): stop graphite breaking when too much pressure applied`                                                                                                                             | Patch Release              |
-| `feat(pencil): add 'graphiteWidth' option`                                                                                                                                                       | ~~Minor~~ Feature Release  |
-| `perf(pencil): remove graphiteWidth option`<br><br>`BREAKING CHANGE: The graphiteWidth option has been removed.`<br>`The default graphite width of 10mm is always used for performance reasons.` | ~~Major~~ Breaking Release |
+| Commit message | Release type               |
+| -------------- | -------------------------- |
+| `fix(Docs): Fixed a typo in documentation` | Patch Release |
+| `feat(Docs): Added new documentation file` | Feature Release |
+| `perf(Docs): Removed documentation for feature`<br><br>`BREAKING CHANGE: The documentation for this feature was removed.`<br>`This feature is no longer supported.` | Breaking Release |
 
 For more info see [semantic-release](https://semantic-release.gitbook.io/semantic-release/).
 
