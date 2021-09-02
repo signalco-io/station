@@ -13,7 +13,7 @@ namespace Signal.Beacon.Application.Signal
 {
     internal class SignalClient : ISignalClient, ISignalClientAuthFlow
     {
-        private const string SignalApiUrl = "https://signal-api.azurewebsites.net/api";
+        private const string SignalApiUrl = "https://api.signalco.io/api";
         //private const string SignalApiUrl = "http://localhost:7071";
 
         private static readonly string SignalApiBeaconRefreshTokenUrl = "/beacons/refresh-token";
