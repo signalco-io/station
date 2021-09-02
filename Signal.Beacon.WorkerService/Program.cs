@@ -5,6 +5,8 @@ using Serilog;
 using Serilog.Events;
 using Signal.Beacon.Application;
 using Signal.Beacon.Application.Signal;
+using Signal.Beacon.Channel.PhilipsHue;
+using Signal.Beacon.Channel.Zigbee2Mqtt;
 using Signal.Beacon.Configuration;
 using Signal.Beacon.Core.Helpers;
 
@@ -34,11 +36,11 @@ namespace Signal.Beacon
                         .AddHostedService<Worker>()
                         .AddBeaconConfiguration()
                         .AddBeaconApplication()
-                        .AddSignalApi();
-                        //.AddZigbee2Mqtt()
+                        .AddSignalApi()
+                        .AddZigbee2Mqtt()
                         //.AddTasmota()
                         //.AddSignal()
-                        //.AddPhilipsHue()
+                        .AddPhilipsHue();
                         //.AddSamsung()
                         //.AddIRobot()
                         //.AddVoice();
