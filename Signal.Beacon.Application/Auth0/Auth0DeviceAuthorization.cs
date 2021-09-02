@@ -15,9 +15,9 @@ namespace Signal.Beacon.Application.Auth0
         private const string DeviceCodeUrl = "https://dfnoise.eu.auth0.com/oauth/device/code";
         private const string DeviceTokenUrl = "https://dfnoise.eu.auth0.com/oauth/token";
         private const string GrantType = "urn:ietf:params:oauth:grant-type:device_code";
-        private const string ClientId = "dB5YR1dMiDHESOq3r6w7IP076kuQ9JXA";
+        private const string ClientId = "xTGmoA6adYC9hk7dVbYflHnWBjjTcoE3";
         private const string Scope = "profile email offline_access";
-        private const string Audience = "https://api.signal.dfnoise.com";
+        private const string Audience = "https://api.signalco.io";
         
         public async Task<DeviceCodeResponse> GetDeviceCodeAsync(CancellationToken cancellationToken)
         {
