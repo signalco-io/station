@@ -1,19 +1,13 @@
 # TODO: Open port 1883 for mosquitto
 
-## Install rpi-update
-sudo curl -L --output /usr/bin/rpi-update https://raw.githubusercontent.com/Hexxeh/rpi-update/master/rpi-update && sudo chmod +x /usr/bin/rpi-update
-sudo rpi-update
+## Disable snap updates (metered connection)
+sudo snap set system refresh.metered=hold
 
-## Install Realtek wifi drivers
-sudo wget http://downloads.fars-robotics.net/wifi-drivers/install-wifi -O /usr/bin/install-wifi
-sudo chmod +x /usr/bin/install-wifi
-sudo install-wifi -c rpi-update
-sudo rpi-update
-sudo install-wifi -u rpi-update
+## Configure hostname
+echo "Setting hostname to 'signalcostation'"
+sudo hostnamectl set-hostname signalcostation
 
-echo "Setting hostname to 'signalbeacon'"
-sudo hostnamectl set-hostname signalbeacon
-
+## Configure firewall
 echo "Configuring firewall"
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
@@ -21,8 +15,10 @@ sudo ufw allow ssh
 sudo ufw allow 1883 # Allow MQTT
 sudo ufw enable
 
+## Housekeeping
 echo "Updating system..."
 sudo bash -c 'for i in update {,dist-}upgrade auto{remove,clean}; do apt-get $i -y; done'
+sudo snap refresh
 
 node=$(which npm)
 if [ -z "${node}" ]; then #Installing NodeJS if not already installed.
@@ -36,37 +32,36 @@ fi
 # sudo dpkg -i packages-microsoft-prod.deb
 
 # Install prerequesites
-echo "Installing git, make, g++, gcc, mosquitto, bluez..."
-sudo apt-get install -y git make g++ gcc mosquitto bluez
-# sudo apt-get update
-# sudo apt-get install -y dotnet-sdk-5.0
+echo "Installing dependencies..."
+sudo apt-get install -y make g++ gcc bluez jq
 
-# Install .NET 5.0 SDK
-sudo snap install dotnet-sdk --classic --channel=5.0/edge
-sudo snap alias dotnet-sdk.dotnet dotnet
+## Download latest station
+echo "Downloading latest stable station..."
+URL=$( curl -s "https://api.github.com/repos/signalco-io/station/releases/latest" | jq -r '.assets[] | select(.name | test("beacon-v(.*)-linux-arm64.tar.gz")) | .browser_download_url' )
+FILENAME=$( echo $URL | grep -oP "beacon-v\d*.\d*.\d*-linux-arm64" )
+curl -LO "$URL"
+sudo mkdir /opt/signalcostation
+sudo tar -xf ./$FILENAME.tar.gz -C /opt/signalcostation
+sudo chown -R ubuntu:ubuntu /opt/signalcostation
+cd /opt/signalcostation || exit
 
-echo "Cloning Signal.Beacon git repository..."
-sudo git clone --single-branch --branch main https://github.com/AleksandarDev/beacon.git  /opt/signalbeacon
-sudo chown -R ubuntu:ubuntu /opt/signalbeacon
-cd /opt/signalbeacon || exit
-
-# TODO: Build 
-
-echo "Creating service file signalbeacon.service and enableing..."
-service_path="/etc/systemd/system/signalbeacon.service"
+## Configure service
+## TODO: Test if $FILENAME is valid in echo
+echo "Creating service file signalcostation.service and enableing..."
+service_path="/etc/systemd/system/signalcostation.service"
 echo "[Unit]
-Description=Signal Beacon
+Description=Signal Station
 After=network.target
 [Service]
-ExecStart=/usr/bin/npm start
-WorkingDirectory=/opt/signalbeacon
+ExecStart=/opt/signalcostation/$FILENAME/Signal.Beacon
+WorkingDirectory=/opt/signalcostation/$FILENAME
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
 User=ubuntu
 [Install]
 WantedBy=multi-user.target" > $service_path
-sudo systemctl enable signalbeacon.service
+sudo systemctl enable signalcostation.service
 
 echo "Cloning dev branch of Zigbee2mqtt git repository..."
 sudo git clone --single-branch --branch dev https://github.com/Koenkk/zigbee2mqtt.git  /opt/zigbee2mqttdev
@@ -92,4 +87,4 @@ User=ubuntu
 WantedBy=multi-user.target" > $service_path
 sudo systemctl enable zigbee2mqttdev.service
 
-rsync -a 
+#rsync -a 
