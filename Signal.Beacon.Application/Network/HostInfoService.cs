@@ -49,8 +49,15 @@ namespace Signal.Beacon.Application.Network
 
         private async Task<string?> ResolveHostNameAsync(string ipAddress)
         {
-            var entry = await Dns.GetHostEntryAsync(ipAddress);
-            return entry.HostName;
+            try
+            {
+                var entry = await Dns.GetHostEntryAsync(ipAddress);
+                return entry.HostName;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private async Task<HostInfo?> GetHostInformationAsync(

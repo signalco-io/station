@@ -173,7 +173,7 @@ namespace Signal.Beacon.Application.Mqtt
         {
             // Dispatch unavailable event when connection failed counter reaches threshold
             // Set counter to min value so we don't dispatch event again
-            if (arg.Exception.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused } &&
+            if (arg.Exception?.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused } &&
                 ++this.connectionFailedCounter >= UnavailableConnectionFailedThreshold)
             {
                 this.OnUnavailable?.Invoke(this, EventArgs.Empty);
