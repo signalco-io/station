@@ -5,10 +5,6 @@ then
 	exit 1
 fi
 
-## Housekeeping
-echo "Updating system..."
-sudo bash -c 'for i in update {,dist-}upgrade auto{remove,clean}; do apt-get $i -y; done'
-
 ## Stop station
 echo "Stopping station..."
 sudo systemctl stop signalcostation.service
