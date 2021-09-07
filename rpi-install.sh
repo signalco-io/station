@@ -1,3 +1,11 @@
+# Root required
+if [ $(id -u) != "0" ];
+then
+	echo -e "|   Error: You need to be root to install the NodeQuery agent\n|"
+	echo -e "|          The agent itself will NOT be running as root but instead under its own non-privileged user\n|"
+	exit 1
+fi
+
 # Create SWAP file
 grep -q "swapfile" /etc/fstab
 if [ $? -ne 0 ]; then
