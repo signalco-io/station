@@ -63,7 +63,7 @@ URL=$( curl -s "https://api.github.com/repos/signalco-io/station/releases/latest
 FILENAME=$( echo $URL | grep -oP "beacon-v\d*.\d*.\d*-linux-arm64" )
 curl -LO "$URL"
 echo "Extracting station files..."
-sudo mkdir /opt/signalcostation
+sudo mkdir -p /opt/signalcostation
 sudo tar -xf ./$FILENAME.tar.gz -C /opt/signalcostation
 sudo chown -R ubuntu:ubuntu /opt/signalcostation
 cd /opt/signalcostation || exit
