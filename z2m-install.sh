@@ -5,7 +5,7 @@ then
 	exit 1
 fi
 
-echo "Cloning dev branch of Zigbee2mqtt git repository..."
+echo "Cloning Zigbee2mqtt git repository..."
 sudo git clone --single-branch --branch master https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
 sudo chown -R ubuntu:ubuntu /opt/zigbee2mqtt
 
