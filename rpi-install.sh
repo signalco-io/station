@@ -24,7 +24,7 @@ sudo ufw allow ssh
 sudo ufw allow 1883 # Allow MQTT
 sudo ufw allow 8080 # Allow Z2M UI (Optional)
 sudo ufw allow 80 # Allow Station UI
-sudo ufw enable
+echo "y" | sudo ufw enable
 
 ## Housekeeping
 echo "Updating system..."
