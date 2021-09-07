@@ -5,7 +5,11 @@ using Serilog;
 using Serilog.Events;
 using Signal.Beacon.Application;
 using Signal.Beacon.Application.Signal;
+using Signal.Beacon.Channel.iRobot;
 using Signal.Beacon.Channel.PhilipsHue;
+using Signal.Beacon.Channel.Samsung;
+using Signal.Beacon.Channel.Signal;
+using Signal.Beacon.Channel.Tasmota;
 using Signal.Beacon.Channel.Zigbee2Mqtt;
 using Signal.Beacon.Configuration;
 using Signal.Beacon.Core.Helpers;
@@ -38,11 +42,11 @@ namespace Signal.Beacon
                         .AddBeaconApplication()
                         .AddSignalApi()
                         .AddZigbee2Mqtt()
-                        //.AddTasmota()
-                        //.AddSignal()
-                        .AddPhilipsHue();
-                        //.AddSamsung()
-                        //.AddIRobot()
+                        .AddTasmota()
+                        .AddSignal()
+                        .AddPhilipsHue()
+                        .AddSamsung()
+                        .AddIRobot();
                         //.AddVoice();
 
                     services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));
