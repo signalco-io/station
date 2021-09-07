@@ -54,7 +54,12 @@ fi
 
 # Install prerequesites
 echo "Installing dependencies..."
-sudo apt-get install -y make g++ gcc bluez jq
+sudo apt-get install -y make g++ gcc bluez jq mosquitto
+
+## Configure mosquitto
+### TODO: Test this
+echo "listener 1883
+allow_anonymous true" > /etc/mosquitto/conf.d/mosquitto.conf
 
 ## Download latest station
 echo "Downloading latest stable station..."
