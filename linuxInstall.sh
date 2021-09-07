@@ -26,7 +26,7 @@ echo "Updating system..."
 sudo bash -c 'for i in update {,dist-}upgrade auto{remove,clean}; do apt-get $i -y; done'
 
 ### Disable snap updates (metered connection) and do update now
-echo "Disableing SNAP updates..."
+echo "Disabling SNAP updates..."
 sudo snap set system refresh.metered=hold
 echo "Updating snaps..."
 sudo snap refresh
@@ -49,13 +49,13 @@ echo "Downloading latest stable station..."
 URL=$( curl -s "https://api.github.com/repos/signalco-io/station/releases/latest" | jq -r '.assets[] | select(.name | test("beacon-v(.*)-linux-arm64.tar.gz")) | .browser_download_url' )
 FILENAME=$( echo $URL | grep -oP "beacon-v\d*.\d*.\d*-linux-arm64" )
 curl -LO "$URL"
+echo "Extracting station files..."
 sudo mkdir /opt/signalcostation
 sudo tar -xf ./$FILENAME.tar.gz -C /opt/signalcostation
 sudo chown -R ubuntu:ubuntu /opt/signalcostation
 cd /opt/signalcostation || exit
 
 ## Configure service
-## TODO: Test if $FILENAME is valid in echo
 echo "Creating service file signalcostation.service and enableing..."
 service_path="/etc/systemd/system/signalcostation.service"
 echo "[Unit]
