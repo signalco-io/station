@@ -97,8 +97,8 @@ namespace Signal.Beacon.Application
             await this.processor.StartAsync(cancellationToken);
             await this.conductManager.StartAsync(cancellationToken);
 
-            this.mqttServer = new MqttServer();
-            await this.mqttServer.StartAsync(cancellationToken);
+            //this.mqttServer = new MqttServer();
+            //await this.mqttServer.StartAsync(cancellationToken);
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

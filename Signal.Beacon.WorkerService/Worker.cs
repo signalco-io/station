@@ -40,7 +40,7 @@ namespace Signal.Beacon
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             // Load configuration
-            var config = await this.configurationService.LoadAsync<BeaconConfiguration>("Beacon.json", stoppingToken);
+            var config = await this.configurationService.LoadAsync<BeaconConfiguration>("beacon.json", stoppingToken);
             if (config.Token == null)
             {
                 this.logger.LogInformation("Beacon not registered. Started registration...");
@@ -63,15 +63,18 @@ namespace Signal.Beacon
                     
                     var token = await new Auth0DeviceAuthorization().WaitTokenAsync(deviceCodeResponse, stoppingToken);
                     if (token == null)
-                        throw new Exception("Token response not received.");
+                        throw new Exception("Token response not received");
+                    this.logger.LogInformation("Authorized successfully");
 
                     // Register Beacon
-                    this.logger.LogInformation("Authorized successfully.");
                     this.signalClientAuthFlow.AssignToken(token);
                     await this.signalClient.RegisterBeaconAsync(config.Identifier, stoppingToken);
+                    this.logger.LogInformation("Registered successfully");
 
+                    // Persist token
                     config.Token = token;
                     await this.configurationService.SaveAsync("beacon.json", config, stoppingToken);
+                    this.logger.LogInformation("Token saved");
                 }
                 catch (Exception ex)
                 {
@@ -83,7 +86,7 @@ namespace Signal.Beacon
                 this.signalClientAuthFlow.AssignToken(config.Token);
             }
 
-            this.signalClientAuthFlow.OnTokenRefreshed += SignalClientAuthFlowOnOnTokenRefreshed;
+            this.signalClientAuthFlow.OnTokenRefreshed += this.SignalClientAuthFlowOnOnTokenRefreshed;
             
             // Start worker services
             await Task.WhenAll(this.workerServices.Value.Select(ws => this.StartWorkerService(ws, stoppingToken)));
