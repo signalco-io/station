@@ -10,7 +10,6 @@ using Signal.Beacon.Application.Auth;
 using Signal.Beacon.Application.Auth0;
 using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Core.Configuration;
-using Signal.Beacon.Core.Signal;
 using Signal.Beacon.Core.Workers;
 
 namespace Signal.Beacon
@@ -19,6 +18,7 @@ namespace Signal.Beacon
     {
         private readonly ISignalBeaconClient signalClient;
         private readonly ISignalClientAuthFlow signalClientAuthFlow;
+        private readonly IStationStateService stationStateService;
         private readonly Lazy<IEnumerable<IWorkerService>> workerServices;
         private readonly IConfigurationService configurationService;
         private readonly ILogger<Worker> logger;
@@ -26,12 +26,14 @@ namespace Signal.Beacon
         public Worker(
             ISignalBeaconClient signalClient,
             ISignalClientAuthFlow signalClientAuthFlow,
+            IStationStateService stationStateService,
             Lazy<IEnumerable<IWorkerService>> workerServices, 
             IConfigurationService configurationService,
             ILogger<Worker> logger)
         {
             this.signalClient = signalClient ?? throw new ArgumentNullException(nameof(signalClient));
             this.signalClientAuthFlow = signalClientAuthFlow ?? throw new ArgumentNullException(nameof(signalClientAuthFlow));
+            this.stationStateService = stationStateService ?? throw new ArgumentNullException(nameof(stationStateService));
             this.workerServices = workerServices ?? throw new ArgumentNullException(nameof(workerServices));
             this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -91,6 +93,11 @@ namespace Signal.Beacon
             // Start worker services
             await Task.WhenAll(this.workerServices.Value.Select(ws => this.StartWorkerService(ws, stoppingToken)));
             this.logger.LogInformation("All worker services started.");
+
+            // Report state to cloud
+            await this.signalClient.ReportAsync(
+                await this.stationStateService.GetAsync(stoppingToken),
+                stoppingToken);
 
             // Wait for cancellation token
             while (!stoppingToken.IsCancellationRequested)

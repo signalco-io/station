@@ -1,8 +1,8 @@
 using Signal.Beacon.Application.Auth;
 
-namespace Signal.Beacon
+namespace Signal.Beacon.Application.Signal
 {
-    internal class BeaconConfiguration
+    public class BeaconConfiguration
     {
         public string? Identifier { get; set; }
 

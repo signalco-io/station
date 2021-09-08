@@ -12,6 +12,7 @@ namespace Signal.Beacon.Application.Signal
             return services
                 .AddTransient<ISignalDevicesClient, SignalDevicesClient>()
                 .AddTransient<ISignalBeaconClient, SignalBeaconClient>()
+                .AddTransient<IStationStateService, StationStateService>()
                 .AddTransient<ISignalProcessesClient, SignalProcessesClient>()
                 .AddSingleton<ISignalClient, ISignalClientAuthFlow, SignalClient>()
                 .AddSingleton<ISignalSignalRDevicesHubClient, SignalSignalRDevicesHubClient>()
