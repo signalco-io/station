@@ -40,9 +40,10 @@ jobs:
         # Define some variables for things we need
         tag=$(git describe --tags --abbrev=0)
         release_name="beacon-$tag-${{ matrix.target }}"
+        ver="${tag:1}"
 
         # Build everything
-        dotnet publish ./Signal.Beacon.WorkerService/Signal.Beacon.csproj -c Release -o "$release_name" -r "${{ matrix.target }}" --self-contained true
+        dotnet publish ./Signal.Beacon.WorkerService/Signal.Beacon.csproj -p:Version=ver -c Release -o "$release_name" -r "${{ matrix.target }}" --self-contained true
 
         # Pack files
         if [ "${{ matrix.target }}" == "win-x64" ]; then
