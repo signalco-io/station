@@ -41,6 +41,9 @@ namespace Signal.Beacon.Channel.Signal
         [JsonPropertyName("mqttTopic")]
         public string? MqttTopic { get; set; }
 
+        [JsonPropertyName("alias")]
+        public string? Alias { get; set; }
+
         [JsonPropertyName("contacts")]
         public List<Contact>? Contacts { get; set; }
 

@@ -110,7 +110,7 @@ namespace Signal.Beacon.Channel.Signal
                     // Signal new device discovered
                     await this.deviceDiscoveryHandler.HandleAsync(
                         new DeviceDiscoveredCommand(
-                            config.WifiHostname ?? deviceIdentifier,
+                            config.Alias ?? (config.WifiHostname ?? deviceIdentifier),
                             deviceIdentifier),
                         this.startCancellationToken);
 
@@ -124,20 +124,28 @@ namespace Signal.Beacon.Channel.Signal
 
                         foreach (var configContact in config.Contacts)
                         {
-                            if (configContact.Name != null &&
-                                configContact.DataType != null)
+                            try
                             {
-                                await this.deviceContactUpdateHandler.HandleAsync(
-                                    DeviceContactUpdateCommand.FromDevice(
-                                        device,
-                                        SignalChannels.DeviceChannel,
-                                        configContact.Name,
-                                        c => c with
-                                        {
-                                            DataType = configContact.DataType,
-                                            Access = configContact.Access ?? DeviceContactAccess.None
-                                        }),
-                                    this.startCancellationToken);
+                                if (configContact.Name != null &&
+                                    configContact.DataType != null)
+                                {
+                                    await this.deviceContactUpdateHandler.HandleAsync(
+                                        DeviceContactUpdateCommand.FromDevice(
+                                            device,
+                                            SignalChannels.DeviceChannel,
+                                            configContact.Name,
+                                            c => c with
+                                            {
+                                                DataType = configContact.DataType,
+                                                Access = configContact.Access ?? DeviceContactAccess.None,
+                                            }),
+                                        this.startCancellationToken);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                this.logger.LogTrace(ex, "Failed to update contact.");
+                                this.logger.LogWarning("Failed to update contact for contact {DeviceIdentifier} {ContactName}", deviceIdentifier, configContact.Name);
                             }
                         }
                     }
