@@ -189,7 +189,7 @@ namespace Signal.Beacon.Channel.Signal
                     await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
                             new DeviceTarget(SignalChannels.DeviceChannel, deviceIdentifier,
                                 telemetryContact.ContactName),
-                            telemetryContact.ValueSerialized),
+                            telemetryContact.Value),
                         this.startCancellationToken);
                 }
             }

@@ -17,7 +17,7 @@ namespace Signal.Beacon.Channel.Signal
             public string? ContactName { get; set; }
 
             [JsonPropertyName("value")]
-            public string? ValueSerialized { get; set; }
+            public object? Value { get; set; }
         }
     }
 }
