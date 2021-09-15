@@ -58,9 +58,6 @@ namespace Signal.Beacon.Channel.Signal
 
             [JsonPropertyName("name")]
             public string? Name { get; set; }
-
-            [JsonPropertyName("value")]
-            public bool? Value { get; set; }
         }
     }
 }
