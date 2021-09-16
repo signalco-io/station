@@ -67,7 +67,7 @@ namespace Signal.Beacon.Application
             // Ignore if value didnt change, dont ignore for actions
             var currentState = ParseValue(await this.GetStateAsync(target));
             var oldAndNewNull = currentState == null && setValue == null;
-            var isAction = contact.DataType != "action";
+            var isAction = contact.DataType == "action";
             var areEqual = currentState?.Equals(setValue) ?? false;
             var areEqualValues = currentState == setValue;
             if (oldAndNewNull || 
