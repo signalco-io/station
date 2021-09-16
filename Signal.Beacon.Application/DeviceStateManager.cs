@@ -68,9 +68,10 @@ namespace Signal.Beacon.Application
             var currentState = ParseValue(await this.GetStateAsync(target));
             var oldAndNewNull = currentState == null && setValue == null;
             var isAction = contact.DataType != "action";
-            var areEqual = currentState?.Equals(setValue) ?? false; 
+            var areEqual = currentState?.Equals(setValue) ?? false;
+            var areEqualValues = currentState == setValue;
             if (oldAndNewNull || 
-                !isAction && areEqual)
+                !isAction && (areEqual || areEqualValues))
             {
                 this.logger.LogTrace(
                     "Device state ignore because it didn't change. {DeviceId} {Contact}: {Value}",
