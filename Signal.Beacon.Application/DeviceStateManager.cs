@@ -41,18 +41,6 @@ namespace Signal.Beacon.Application
         {
             var setValue = ParseValue(value);
 
-            // TODO: Check if contact trigger is every or on change
-            var currentState = ParseValue(await this.GetStateAsync(target));
-            if (currentState == null && setValue == null || (currentState?.Equals(setValue) ?? false))
-            {
-                this.logger.LogTrace(
-                    "Device state ignore because it didn't change. {DeviceId} {Contact}: {Value}",
-                    target.Identifier, 
-                    target.Contact,
-                    setValue);
-                return;
-            }
-
             // Retrieve device
             var device = await this.devicesDao.GetAsync(target.Identifier, cancellationToken);
             if (device == null)
@@ -71,6 +59,19 @@ namespace Signal.Beacon.Application
                 this.logger.LogTrace(
                     "Device contact not found {DeviceId} {Contact}: {Value}. State ignored.",
                     target.Identifier,
+                    target.Contact,
+                    setValue);
+                return;
+            }
+
+            // TODO: Check if contact trigger is every or on change
+            var currentState = ParseValue(await this.GetStateAsync(target));
+            if (currentState == null && setValue == null || 
+                (contact.DataType != "action" && currentState?.Equals(setValue) ?? false))
+            {
+                this.logger.LogTrace(
+                    "Device state ignore because it didn't change. {DeviceId} {Contact}: {Value}",
+                    target.Identifier, 
                     target.Contact,
                     setValue);
                 return;
