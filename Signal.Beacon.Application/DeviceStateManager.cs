@@ -45,7 +45,7 @@ namespace Signal.Beacon.Application
             var device = await this.devicesDao.GetAsync(target.Identifier, cancellationToken);
             if (device == null)
             {
-                this.logger.LogDebug("Device with identifier not found {DeviceId} {Contact}: {Value}. State ignored.",
+                this.logger.LogDebug("Device with identifier not found {DeviceId} {Contact}: {Value}. State ignored",
                     target.Identifier,
                     target.Contact,
                     setValue);
@@ -57,7 +57,7 @@ namespace Signal.Beacon.Application
             if (contact == null)
             {
                 this.logger.LogTrace(
-                    "Device contact not found {DeviceId} {Contact}: {Value}. State ignored.",
+                    "Device contact not found {DeviceId} {Contact}: {Value}. State ignored",
                     target.Identifier,
                     target.Contact,
                     setValue);
@@ -66,8 +66,11 @@ namespace Signal.Beacon.Application
 
             // Ignore if value didnt change, dont ignore for actions
             var currentState = ParseValue(await this.GetStateAsync(target));
-            if (currentState == null && setValue == null || 
-                (contact.DataType != "action" && (currentState?.Equals(setValue) ?? false)))
+            var oldAndNewNull = currentState == null && setValue == null;
+            var isAction = contact.DataType != "action";
+            var areEqual = currentState?.Equals(setValue) ?? false; 
+            if (oldAndNewNull || 
+                !isAction && areEqual)
             {
                 this.logger.LogTrace(
                     "Device state ignore because it didn't change. {DeviceId} {Contact}: {Value}",
@@ -108,9 +111,10 @@ namespace Signal.Beacon.Application
                 await this.signalClient.DevicesPublishStateAsync(device.Id, target, setValue, timeStamp, cancellationToken);
 
                 this.logger.LogDebug(
-                    "Device state updated - {DeviceId} {Contact}: {Value}",
+                    "Device state updated - {DeviceId} {Contact}: {OldValue} -> {Value}",
                     target.Identifier,
                     target.Contact,
+                    currentState,
                     setValue);
             }
             catch (Exception ex) when (ex.Message.Contains("IDX10223"))
