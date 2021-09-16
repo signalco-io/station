@@ -64,7 +64,7 @@ namespace Signal.Beacon.Application
                 return;
             }
 
-            // TODO: Check if contact trigger is every or on change
+            // Ignore if value didnt change, dont ignore for actions
             var currentState = ParseValue(await this.GetStateAsync(target));
             if (currentState == null && setValue == null || 
                 ((contact.DataType != "action" ?? true) && (currentState?.Equals(setValue) ?? false)))
