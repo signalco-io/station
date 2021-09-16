@@ -67,11 +67,11 @@ namespace Signal.Beacon.Application
             // Ignore if value didnt change, dont ignore for actions
             var currentState = ParseValue(await this.GetStateAsync(target));
             var oldAndNewNull = currentState == null && setValue == null;
-            var isActionOrString = contact.DataType == "action" || contact.DataType == "string";
+            var isActionOrStringOrEnum = contact.DataType is "action" or "string" or "enum";
             var areEqual = currentState?.Equals(setValue) ?? false;
             var areEqualValues = currentState == setValue;
             if (oldAndNewNull || 
-                !isActionOrString && (areEqual || areEqualValues))
+                !isActionOrStringOrEnum && (areEqual || areEqualValues))
             {
                 this.logger.LogTrace(
                     "Device state ignore because it didn't change. {DeviceId} {Contact}: {Value}",
