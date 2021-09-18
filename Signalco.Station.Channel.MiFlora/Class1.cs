@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HashtagChris.DotNetBlueZ;
+using HashtagChris.DotNetBlueZ.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Workers;
@@ -62,8 +63,49 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task adapter_DeviceFoundAsync(Adapter sender, DeviceFoundEventArgs args)
         {
-            var properties = await args.Device.GetAllAsync();
-            this.logger.LogDebug("BLE Device properties: {@Properties}", properties);
+            this.logger.LogDebug("BLE Device found: {DevicePath}", args.Device.ObjectPath);
+            
+            // Attach to device callbacks
+            args.Device.ServicesResolved += this.DeviceOnServicesResolved;
+            args.Device.Connected += this.DeviceOnConnected;
+            args.Device.Disconnected += this.DeviceOnDisconnected;
+
+            try
+            {
+                this.logger.LogDebug("BLE Device: {DevicePath} connecting...", args.Device.ObjectPath);
+                await args.Device.ConnectAsync();
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}", args.Device.ObjectPath);
+            }
+
+            try
+            {
+                var properties = await args.Device.GetAllAsync();
+                this.logger.LogDebug("BLE Device: {DevicePath} properties: {@Properties}", args.Device.ObjectPath, properties);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}", args.Device.ObjectPath);
+            }
+        }
+
+        private async Task DeviceOnDisconnected(Device sender, BlueZEventArgs eventargs)
+        {
+            this.logger.LogDebug("BLE Device disconnected: {DevicePath}", sender.ObjectPath);
+        }
+
+        private async Task DeviceOnConnected(Device sender, BlueZEventArgs eventargs)
+        {
+            this.logger.LogDebug("BLE Device connected: {DevicePath}", sender.ObjectPath);
+        }
+
+        private async Task DeviceOnServicesResolved(Device sender, BlueZEventArgs args)
+        {
+            this.logger.LogDebug("BLE service resolver {State}", args.IsStateChange);
+            var services = await sender.GetServicesAsync();
+            this.logger.LogDebug("BLE Services: {@Services}", services);
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
