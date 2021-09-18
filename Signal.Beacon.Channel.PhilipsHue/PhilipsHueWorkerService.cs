@@ -73,6 +73,28 @@ namespace Signal.Beacon.Channel.PhilipsHue
             this.conductSubscriberClient.Subscribe(PhilipsHueChannels.DeviceChannel, this.ConductHandlerAsync);
         }
 
+        private async void BeginStreamClip(BridgeConfig config, CancellationToken cancellationToken)
+        {
+            var client = new HttpClient(new HttpClientHandler
+                { ServerCertificateCustomValidationCallback = (_, _, _, _) => true });
+            client.DefaultRequestHeaders.Add("hue-application-key", config.LocalAppKey);
+            var clipUrl = "https://" + config.IpAddress + "/eventstream/clip/v2";
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var response = await client.GetAsync(clipUrl, cancellationToken);
+                    if (response.IsSuccessStatusCode)
+                        await this.RefreshDeviceStatesAsync(config.Id, cancellationToken);
+                }
+                catch
+                {
+                    // Wait for next one
+                }
+            }
+        }
+
         private async Task ConductHandlerAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
             foreach (var lightIdentifierConducts in conducts.GroupBy(c => c.Target.Identifier))
@@ -169,7 +191,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
                     }
                 }
 
-                await Task.Delay(5000, cancellationToken);
+                await Task.Delay(10000, cancellationToken);
             }
         }
 
@@ -256,6 +278,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
 
                 await this.SyncDevicesWithBridge(config.Id, cancellationToken);
                 await this.RefreshDeviceStatesAsync(config.Id, cancellationToken);
+                this.BeginStreamClip(config, cancellationToken);
             }
             catch (Exception ex) when (ex is SocketException {SocketErrorCode: SocketError.TimedOut} ||
                                        ex is HttpRequestException && ex.InnerException is SocketException
