@@ -38,18 +38,25 @@ namespace Signalco.Station.Channel.MiFlora
         {
             this.logger.LogDebug("Started discovery...");
 
-            var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
-            if (adapter == null)
-                throw new Exception("No BT adapter available.");
-
-            // Start discovery
-            this.logger.LogDebug("Using adapter: {AdapterName}", adapter.ObjectPath);
-            adapter.DeviceFound += this.adapter_DeviceFoundAsync;
-            await adapter.StartDiscoveryAsync();
-
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                Thread.Sleep(100);
+                var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
+                if (adapter == null)
+                    throw new Exception("No BT adapter available.");
+
+                // Start discovery
+                this.logger.LogDebug("Using adapter: {AdapterName}", adapter.ObjectPath);
+                adapter.DeviceFound += this.adapter_DeviceFoundAsync;
+                await adapter.StartDiscoveryAsync();
+
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    Thread.Sleep(100);
+                }
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogDebug(ex, "Discovery failed.");
             }
         }
 
