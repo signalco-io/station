@@ -5,10 +5,6 @@ then
 	exit 1
 fi
 
-## Stop station
-echo "Stopping station..."
-sudo systemctl stop signalcostation.service
-
 ## Download latest station
 echo "Downloading latest stable station..."
 URL=$( curl -s "https://api.github.com/repos/signalco-io/station/releases/latest" | jq -r '.assets[] | select(.name | test("beacon-v(.*)-linux-arm64.tar.gz")) | .browser_download_url' )
@@ -19,6 +15,10 @@ sudo mkdir -p /opt/signalcostation
 sudo tar -xf ./$FILENAME.tar.gz -C /opt/signalcostation
 sudo chown -R ubuntu:ubuntu /opt/signalcostation
 cd /opt/signalcostation || exit
+
+## Stop station
+echo "Stopping station..."
+sudo systemctl stop signalcostation.service
 
 ## Configure service
 echo "Creating service file signalcostation.service and enabling..."
