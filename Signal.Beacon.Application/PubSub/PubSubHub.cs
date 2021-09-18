@@ -13,13 +13,13 @@ namespace Signal.Beacon.Application.PubSub
         {
         }
 
-        private Handler CreateHandler(object subscriber, Func<TData, CancellationToken, Task> handler) =>
+        private Handler CreateHandler(object subscriber, Func<IEnumerable<TData>, CancellationToken, Task> handler) =>
             new(this, subscriber, handler);
 
-        public IDisposable Subscribe(Func<TData, CancellationToken, Task> handler) =>
+        public IDisposable Subscribe(Func<IEnumerable<TData>, CancellationToken, Task> handler) =>
             this.Subscribe(this, handler);
 
-        public IDisposable Subscribe(object subscriber, Func<TData, CancellationToken, Task> handler) =>
+        public IDisposable Subscribe(object subscriber, Func<IEnumerable<TData>, CancellationToken, Task> handler) =>
             this.SubscribeInternal(this.CreateHandler(subscriber, handler));
 
         public virtual async Task PublishAsync(
@@ -29,9 +29,8 @@ namespace Signal.Beacon.Application.PubSub
             IEnumerable<Task> listenersExecutionTasks;
             lock (this.ListenersLock)
             {
-                listenersExecutionTasks = data
-                    .SelectMany(dataItem =>
-                        this.Listeners.Select(l => l.Func(dataItem, cancellationToken)))
+                listenersExecutionTasks = this.Listeners
+                    .Select(l => l.Func(data, cancellationToken))
                     .ToList();
             }
 
@@ -43,7 +42,7 @@ namespace Signal.Beacon.Application.PubSub
             public Handler(
                 PubSubHubBase<TData, Handler> owner,
                 object subscriber,
-                Func<TData, CancellationToken, Task> func) : base(owner, subscriber, func)
+                Func<IEnumerable<TData>, CancellationToken, Task> func) : base(owner, subscriber, func)
             {
             }
         }

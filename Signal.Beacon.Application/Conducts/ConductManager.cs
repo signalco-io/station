@@ -71,7 +71,7 @@ namespace Signal.Beacon.Application.Conducts
                 await this.PublishInternalAsync(new[] {conduct}, cancellationToken);
         }
 
-        public IDisposable Subscribe(string channel, Func<Conduct, CancellationToken, Task> handler) =>
+        public IDisposable Subscribe(string channel, Func<IEnumerable<Conduct>, CancellationToken, Task> handler) =>
             this.conductHub.Subscribe(new[] {channel}, handler);
 
         public async Task PublishAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
@@ -91,7 +91,7 @@ namespace Signal.Beacon.Application.Conducts
         {
             try
             {
-                var enumerable = conducts?.ToList() ?? new List<Conduct>();
+                var enumerable = conducts as IList<Conduct> ?? conducts.ToList();
                 foreach (var conduct in enumerable)
                     this.logger.LogDebug("Publishing conduct {Target} {Value} (after {Delay}ms)", conduct.Target,
                         conduct.Value, conduct.Delay);

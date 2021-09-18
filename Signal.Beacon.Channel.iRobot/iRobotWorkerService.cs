@@ -85,42 +85,53 @@ namespace Signal.Beacon.Channel.iRobot
             else this.configuration.RoombaRobots.ForEach((c) => _ = this.ConnectToRoomba(c));
         }
 
-        private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
+        private async Task ConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            var robotId = conduct.Target.Identifier;
-
-            switch (conduct.Target.Contact)
+            foreach (var conduct in conducts)
             {
-                case "cleanArea":
-                    var areas = JsonSerializer.Deserialize<IEnumerable<string>>(
-                                    conduct.Value.ToString() ??
-                                    throw new InvalidOperationException("Expected array of data values.")) ??
-                                throw new Exception("Failed to deserialize areas.");
-
-                    var mapId = "";
-                    var userMapId = "";
-                    var regions = new List<(string regionId, string type)>();
-                    foreach (var area in areas)
+                try
+                {
+                    var robotId = conduct.Target.Identifier;
+                    switch (conduct.Target.Contact)
                     {
-                        var valueSplit = area.Split("-");
-                        if (valueSplit.Length < 4)
-                            throw new Exception("Invalid conduct value. Expected mapId, userMapId, type and regionId separated by '-'.");
+                        case "cleanArea":
+                            var areas = JsonSerializer.Deserialize<IEnumerable<string>>(
+                                            conduct.Value.ToString() ??
+                                            throw new InvalidOperationException("Expected array of data values.")) ??
+                                        throw new Exception("Failed to deserialize areas.");
 
-                        mapId = valueSplit[0];
-                        userMapId = valueSplit[1];
-                        regions.Add((valueSplit[3], valueSplit[2]));
+                            var mapId = "";
+                            var userMapId = "";
+                            var regions = new List<(string regionId, string type)>();
+                            foreach (var area in areas)
+                            {
+                                var valueSplit = area.Split("-");
+                                if (valueSplit.Length < 4)
+                                    throw new Exception(
+                                        "Invalid conduct value. Expected mapId, userMapId, type and regionId separated by '-'.");
+
+                                mapId = valueSplit[0];
+                                userMapId = valueSplit[1];
+                                regions.Add((valueSplit[3], valueSplit[2]));
+                            }
+
+                            await this.SendRoombaCleanAreaAsync(robotId, mapId, userMapId, regions);
+                            break;
+                        case "dock":
+                            await this.SendRoombaCommandAsync(robotId, "dock");
+                            break;
+                        case "pause":
+                            await this.SendRoombaCommandAsync(robotId, "pause");
+                            break;
+                        default:
+                            throw new NotSupportedException("Invalid conduct contact.");
                     }
-
-                    await this.SendRoombaCleanAreaAsync(robotId, mapId, userMapId, regions);
-                    break;
-                case "dock":
-                    await this.SendRoombaCommandAsync(robotId, "dock");
-                    break;
-                case "pause":
-                    await this.SendRoombaCommandAsync(robotId, "pause");
-                    break;
-                default:
-                    throw new NotSupportedException("Invalid conduct contact.");
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conduct}", conduct);
+                    this.logger.LogWarning("Failed to execute conduct {@Conduct}", conduct);
+                }
             }
         }
 

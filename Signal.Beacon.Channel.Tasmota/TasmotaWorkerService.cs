@@ -75,11 +75,22 @@ namespace Signal.Beacon.Channel.Tasmota
             this.conductSubscriberClient.Subscribe(TasmotaChannels.DeviceChannel, this.ConductHandler);
         }
 
-        private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
+        private async Task ConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            var client = this.clients.FirstOrDefault();
-            if (client != null)
-                await client.PublishAsync($"signal/{conduct.Target.Identifier}/{conduct.Target.Contact}/set", conduct.Value);
+            foreach (var conduct in conducts)
+            {
+                try
+                {
+                    var client = this.clients.FirstOrDefault();
+                    if (client != null)
+                        await client.PublishAsync($"signal/{conduct.Target.Identifier}/{conduct.Target.Contact}/set", conduct.Value);
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conduct}", conduct);
+                    this.logger.LogWarning("Failed to execute conduct {@Conduct}", conduct);
+                }
+            }
         }
 
         private async void StartMqttClientAsync(TasmotaWorkerServiceConfiguration.MqttServer mqttServerConfig)

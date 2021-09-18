@@ -73,37 +73,50 @@ namespace Signal.Beacon.Channel.Samsung
             this.conductSubscriberClient.Subscribe(SamsungChannels.SamsungChannel, this.SamsungConductHandler);
         }
 
-        private Task SamsungConductHandler(Conduct conduct, CancellationToken cancellationToken)
+        private Task SamsungConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            var remoteId = conduct.Target.Identifier.Replace("samsung-remote/", "");
-            var matchedRemote = this.tvRemotes.FirstOrDefault(r => r.Id == remoteId);
-            if (matchedRemote == null)
-                throw new Exception($"No matching remote found for target {conduct.Target.Identifier}");
-
-            switch (conduct.Target.Contact)
+            foreach (var conduct in conducts)
             {
-                case "keypress":
-                    matchedRemote.KeyPress(conduct.Value.ToString() ??
-                                           throw new ArgumentException($"Invalid conduct value ${conduct.Value}"));
-                    break;
-                case "openApp":
-                    matchedRemote.OpenApp(conduct.Value.ToString() ??
-                                          throw new ArgumentException($"Invalid conduct value ${conduct.Value}"));
-                    break;
-                case "state":
+                try
                 {
-                    var boolString = conduct.Value.ToString()?.ToLowerInvariant();
-                    if (boolString != "true" && boolString != "false")
-                        throw new Exception("Invalid contact value type. Expected boolean.");
+                    var remoteId = conduct.Target.Identifier.Replace("samsung-remote/", "");
+                    var matchedRemote = this.tvRemotes.FirstOrDefault(r => r.Id == remoteId);
+                    if (matchedRemote == null)
+                        throw new Exception($"No matching remote found for target {conduct.Target.Identifier}");
 
-                    // To turn on use WOL, to turn off use power key
-                    if (boolString == "true")
-                        matchedRemote.WakeOnLan();
-                    else matchedRemote.KeyPress("KEY_POWER");
-                    break;
+                    switch (conduct.Target.Contact)
+                    {
+                        case "keypress":
+                            matchedRemote.KeyPress(conduct.Value.ToString() ??
+                                                   throw new ArgumentException(
+                                                       $"Invalid conduct value ${conduct.Value}"));
+                            break;
+                        case "openApp":
+                            matchedRemote.OpenApp(conduct.Value.ToString() ??
+                                                  throw new ArgumentException(
+                                                      $"Invalid conduct value ${conduct.Value}"));
+                            break;
+                        case "state":
+                        {
+                            var boolString = conduct.Value.ToString()?.ToLowerInvariant();
+                            if (boolString != "true" && boolString != "false")
+                                throw new Exception("Invalid contact value type. Expected boolean.");
+
+                            // To turn on use WOL, to turn off use power key
+                            if (boolString == "true")
+                                matchedRemote.WakeOnLan();
+                            else matchedRemote.KeyPress("KEY_POWER");
+                            break;
+                        }
+                        default:
+                            throw new ArgumentOutOfRangeException($"Unsupported contact {conduct.Target.Contact}");
+                    }
                 }
-                default:
-                    throw new ArgumentOutOfRangeException($"Unsupported contact {conduct.Target.Contact}");
+                catch (Exception ex)
+                {
+                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conduct}", conduct);
+                    this.logger.LogWarning("Failed to execute conduct {@Conduct}", conduct);
+                }
             }
 
             return Task.CompletedTask;

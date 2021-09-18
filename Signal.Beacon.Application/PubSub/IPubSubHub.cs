@@ -7,11 +7,11 @@ namespace Signal.Beacon.Application.PubSub
 {
     public interface IPubSubHub<TData>
     {
-        IDisposable Subscribe(Func<TData, CancellationToken, Task> handler);
+        IDisposable Subscribe(Func<IEnumerable<TData>, CancellationToken, Task> handler);
 
         IDisposable Subscribe(
             object subscriber, 
-            Func<TData, CancellationToken, Task> handler);
+            Func<IEnumerable<TData>, CancellationToken, Task> handler);
 
         Task PublishAsync(
             IEnumerable<TData> data,

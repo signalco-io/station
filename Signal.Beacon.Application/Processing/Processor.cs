@@ -59,31 +59,34 @@ namespace Signal.Beacon.Application.Processing
             return Task.CompletedTask;
         }
 
-        private async Task ProcessStateChangedAsync(DeviceTarget target, CancellationToken cancellationToken)
+        private async Task ProcessStateChangedAsync(IEnumerable<DeviceTarget> targets, CancellationToken cancellationToken)
         {
-            var processes = await this.processesService.GetStateTriggeredAsync(cancellationToken);
-            var applicableProcesses = processes
-                .Where(p => !p.IsDisabled)
-                .Where(p =>
-                    p.Configuration is StateTriggerProcessConfiguration pc &&
-                    (pc.Triggers?.Any(t => t == target) ?? false))
-                .ToList();
-            if (!applicableProcesses.Any())
+            foreach (var target in targets)
             {
-                this.logger.LogTrace("Change on target {DeviceEndpointTarget} ignored.", target);
-                return;
+                var processes = await this.processesService.GetStateTriggeredAsync(cancellationToken);
+                var applicableProcesses = processes
+                    .Where(p => !p.IsDisabled)
+                    .Where(p =>
+                        p.Configuration is StateTriggerProcessConfiguration pc &&
+                        (pc.Triggers?.Any(t => t == target) ?? false))
+                    .ToList();
+                if (!applicableProcesses.Any())
+                {
+                    this.logger.LogTrace("Change on target {DeviceEndpointTarget} ignored.", target);
+                    return;
+                }
+
+                // Queue delayed triggers
+                foreach (var delayedStateTriggerProcess in applicableProcesses.Where(p =>
+                    (p.Configuration as StateTriggerProcessConfiguration)?.Delay > 0))
+                    this.delayedTriggers.Enqueue(delayedStateTriggerProcess, TimeSpan.FromMilliseconds(
+                        (delayedStateTriggerProcess.Configuration as StateTriggerProcessConfiguration)?.Delay ?? 0));
+
+                // Trigger no-delay processes immediately
+                await this.EvaluateAndExecute(
+                    applicableProcesses.Where(p => (p.Configuration as StateTriggerProcessConfiguration)?.Delay <= 0),
+                    cancellationToken);
             }
-
-            // Queue delayed triggers
-            foreach (var delayedStateTriggerProcess in applicableProcesses.Where(p =>
-                (p.Configuration as StateTriggerProcessConfiguration)?.Delay > 0))
-                this.delayedTriggers.Enqueue(delayedStateTriggerProcess, TimeSpan.FromMilliseconds(
-                    (delayedStateTriggerProcess.Configuration as StateTriggerProcessConfiguration)?.Delay ?? 0));
-
-            // Trigger no-delay processes immediately
-            await this.EvaluateAndExecute(
-                applicableProcesses.Where(p => (p.Configuration as StateTriggerProcessConfiguration)?.Delay <= 0),
-                cancellationToken);
         }
 
         private async Task EvaluateAndExecute(IEnumerable<Process> applicableProcesses, CancellationToken cancellationToken)

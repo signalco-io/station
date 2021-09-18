@@ -75,12 +75,23 @@ namespace Signal.Beacon.Channel.Signal
             this.conductSubscriberClient.Subscribe(SignalChannels.DeviceChannel, this.ConductHandler);
         }
 
-        private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
+        private async Task ConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            var localIdentifier = conduct.Target.Identifier[7..];
-            var client = this.clients.FirstOrDefault();
-            if (client != null)
-                await client.PublishAsync($"{conduct.Target.Channel}/{localIdentifier}/{conduct.Target.Contact}/set", conduct.Value);
+            foreach (var conduct in conducts)
+            {
+                try
+                {
+                    var localIdentifier = conduct.Target.Identifier[7..];
+                    var client = this.clients.FirstOrDefault();
+                    if (client != null)
+                        await client.PublishAsync($"{conduct.Target.Channel}/{localIdentifier}/{conduct.Target.Contact}/set", conduct.Value);
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conduct}", conduct);
+                    this.logger.LogWarning("Failed to execute conduct {@Conduct}", conduct);
+                }
+            }
         }
 
         private async void StartMqttClientAsync(SignalWorkerServiceConfiguration.MqttServer mqttServerConfig)

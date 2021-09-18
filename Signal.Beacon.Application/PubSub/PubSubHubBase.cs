@@ -59,10 +59,10 @@ namespace Signal.Beacon.Application.PubSub
 
             private WeakReference Subscriber { get; }
 
-            public Func<TData, CancellationToken, Task> Func { get; }
+            public Func<IEnumerable<TData>, CancellationToken, Task> Func { get; }
 
             protected HandlerBase(PubSubHubBase<TData, THandler> owner, object subscriber,
-                Func<TData, CancellationToken, Task> func)
+                Func<IEnumerable<TData>, CancellationToken, Task> func)
             {
                 this.Owner = new WeakReference<PubSubHubBase<TData, THandler>>(owner);
                 this.Subscriber = new WeakReference(subscriber);

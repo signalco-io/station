@@ -21,6 +21,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
     {
         private const int RegisterBridgeRetryTimes = 12;
         private const string PhilipsHueConfigurationFileName = "PhilipsHue.json";
+        private const string LightStateContactName = "on";
         private const string BrightnessContactName = "brightness";
         private const string ColorTemperatureContactName = "color-temperature";
         private const string ColorRgbContactName = "color-rgb";
@@ -72,58 +73,83 @@ namespace Signal.Beacon.Channel.PhilipsHue
             this.conductSubscriberClient.Subscribe(PhilipsHueChannels.DeviceChannel, this.ConductHandlerAsync);
         }
 
-        private async Task ConductHandlerAsync(Conduct conduct, CancellationToken cancellationToken)
+        private async Task ConductHandlerAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            // Try to find device in local lights list
-            var lightIdentifier = conduct.Target.Identifier;
-            if (!this.lights.TryGetValue(ToPhilipsHueDeviceId(lightIdentifier), out var light))
+            foreach (var lightIdentifierConducts in conducts.GroupBy(c => c.Target.Identifier))
             {
-                this.logger.LogWarning(
-                    "No light with specified identifier registered. Target identifier: {TargetIdentifier}",
-                    lightIdentifier);
-                return;
+                try
+                {
+                    var lightIdentifier = lightIdentifierConducts.Key;
+                    if (!this.lights.TryGetValue(ToPhilipsHueDeviceId(lightIdentifier), out var light))
+                    {
+                        this.logger.LogWarning(
+                            "No light with specified identifier registered. Target identifier: {TargetIdentifier}",
+                            lightIdentifier);
+                        continue;
+                    }
+
+                    // Retrieve bridge connection
+                    var bridgeConnection = await this.GetBridgeConnectionAsync(light.BridgeId);
+                    var bridgeLight = await bridgeConnection.LocalClient.GetLightAsync(light.OnBridgeId);
+                    if (bridgeLight == null)
+                    {
+                        this.logger.LogWarning(
+                            "No light with specified identifier found on bridge. Target identifier: {TargetIdentifier}. LightBridgeId: {OnBridgeId}",
+                            lightIdentifier, light.OnBridgeId);
+                        continue;
+                    }
+
+                    // Construct light command from conducts
+                    var lightCommand = new LightCommand();
+                    foreach (var conduct in lightIdentifierConducts)
+                    {
+                        try
+                        {
+                            switch (conduct.Target.Contact)
+                            {
+                                case LightStateContactName:
+                                    lightCommand.On = conduct.Value.ToString()?.ToLowerInvariant() == "true";
+                                    break;
+                                case ColorTemperatureContactName:
+                                    if (!double.TryParse(conduct.Value.ToString(), out var temp))
+                                        throw new Exception("Invalid temperature contact value.");
+
+                                    lightCommand.ColorTemperature = (int)temp.Denormalize(
+                                        bridgeLight.Capabilities.Control.ColorTemperature.Min,
+                                        bridgeLight.Capabilities.Control.ColorTemperature.Max);
+                                    break;
+                                case BrightnessContactName:
+                                    if (!double.TryParse(conduct.Value.ToString(), out var brightness))
+                                        throw new Exception("Invalid brightness contact value.");
+
+                                    lightCommand.Brightness = (byte)brightness.Denormalize(0, 255);
+                                    break;
+                                default:
+                                    throw new NotSupportedException("Not supported contact.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            this.logger.LogTrace(ex, "Couldn't handle conduct {@Conduct}", conduct);
+                            this.logger.LogWarning("Conduct error message: {Message} for conduct: {@Conduct}", ex.Message, conduct);
+                        }
+                    }
+
+                    // Send the constructed command to the bridge
+                    this.logger.LogDebug(
+                        "Sending command to the bridge {BridgeId}: {@Command}",
+                        light.OnBridgeId, lightCommand);
+                    await bridgeConnection.LocalClient.SendCommandAsync(lightCommand, new[] { light.OnBridgeId });
+
+                    // Refresh immediately 
+                    await this.RefreshLightStateAsync(bridgeConnection, light, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conducts}", lightIdentifierConducts);
+                    this.logger.LogWarning("Failed to execute conduct {@Conducts}", lightIdentifierConducts);
+                }
             }
-
-            // Retrieve bridge connection
-            var bridgeConnection = await this.GetBridgeConnectionAsync(light.BridgeId);
-            var bridgeLight = await bridgeConnection.LocalClient.GetLightAsync(light.OnBridgeId);
-            if (bridgeLight == null)
-            {
-                this.logger.LogWarning(
-                    "No light with specified identifier found on bridge. Target identifier: {TargetIdentifier}. LightBridgeId: {OnBridgeId}",
-                    lightIdentifier, light.OnBridgeId);
-                return;
-            }
-
-            switch (conduct.Target.Contact)
-            {
-                case "on":
-                    await bridgeConnection.LocalClient.SendCommandAsync(
-                        new LightCommand { On = conduct.Value.ToString()?.ToLowerInvariant() == "true" },
-                        new[] { light.OnBridgeId });
-                    break;
-                case ColorTemperatureContactName:
-                    if (!double.TryParse(conduct.Value.ToString(), out var temp))
-                        throw new Exception("Invalid temperature contact value.");
-
-                    await bridgeConnection.LocalClient.SendCommandAsync(
-                        new LightCommand { ColorTemperature = (int)temp.Denormalize(bridgeLight.Capabilities.Control.ColorTemperature.Min, bridgeLight.Capabilities.Control.ColorTemperature.Max) },
-                        new[] { light.OnBridgeId });
-                    break;
-                case BrightnessContactName:
-                    if (!double.TryParse(conduct.Value.ToString(), out var brightness))
-                        throw new Exception("Invalid brightness contact value.");
-
-                    await bridgeConnection.LocalClient.SendCommandAsync(
-                        new LightCommand { Brightness = (byte)brightness.Denormalize(0, 255) },
-                        new[] { light.OnBridgeId });
-                    break;
-                default:
-                    throw new NotSupportedException("Not supported contact.");
-            }
-
-            // Refresh immediately 
-            await this.RefreshLightStateAsync(bridgeConnection, light, cancellationToken);
         }
 
         private async Task PeriodicalLightStateRefreshAsync(CancellationToken cancellationToken)
@@ -178,7 +204,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
                 {
                     await this.deviceStateSetHandler.HandleAsync(
                         new DeviceStateSetCommand(
-                            new DeviceTarget(PhilipsHueChannels.DeviceChannel, ToSignalDeviceId(light.UniqueId), "on"),
+                            new DeviceTarget(PhilipsHueChannels.DeviceChannel, ToSignalDeviceId(light.UniqueId), LightStateContactName),
                             updatedLight.State.On),
                         cancellationToken);
                     await this.deviceStateSetHandler.HandleAsync(
@@ -305,7 +331,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
             await this.deviceContactUpdateHandler.HandleManyAsync(
                 cancellationToken,
                 DeviceContactUpdateCommand.FromDevice(
-                    device, PhilipsHueChannels.DeviceChannel, "on", c => c with
+                    device, PhilipsHueChannels.DeviceChannel, LightStateContactName, c => c with
                     {
                         DataType = "bool",
                         Access = DeviceContactAccess.Read | DeviceContactAccess.Write

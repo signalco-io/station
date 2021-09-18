@@ -151,38 +151,48 @@ namespace Signal.Beacon.Channel.Zigbee2Mqtt
             await Task.WhenAll(this.clients.Select(c => c.StopAsync(cancellationToken)));
         }
 
-        private async Task ConductHandler(Conduct conduct, CancellationToken cancellationToken)
+        private async Task ConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            var device = await this.devicesDao.GetAsync(conduct.Target.Identifier, cancellationToken);
-            if (device == null)
+            foreach (var conduct in conducts)
             {
-                this.logger.LogWarning("Conduct device not found. {@Conduct}", conduct);
-                return;
-            }
+                try
+                {
+                    var device = await this.devicesDao.GetAsync(conduct.Target.Identifier, cancellationToken);
+                    if (device == null)
+                    {
+                        this.logger.LogWarning("Conduct device not found. {@Conduct}", conduct);
+                        continue;
+                    }
 
-            var contact = device.Contact(conduct.Target.Channel, conduct.Target.Contact);
-            if (contact == null)
-            {
-                this.logger.LogWarning("Conduct contact not found on device. {@Conduct}", conduct);
-                return;
-            }
+                    var contact = device.Contact(conduct.Target.Channel, conduct.Target.Contact);
+                    if (contact == null)
+                    {
+                        this.logger.LogWarning("Conduct contact not found on device. {@Conduct}", conduct);
+                        continue;
+                    }
 
-            string? value = null;
-            if (contact.DataType == "enum" ||
-                contact.DataType == "double")
-            {
-                value = conduct.Value.ToString() ?? null;
-            }
-            else if (contact.DataType == "bool")
-            {
-                value = conduct.Value.ToString()?.ToLowerInvariant() == "true" ? "ON" : "OFF";
-            }
+                    string? value = null;
+                    if (contact.DataType is "enum" or "double")
+                    {
+                        value = conduct.Value.ToString() ?? null;
+                    }
+                    else if (contact.DataType == "bool")
+                    {
+                        value = conduct.Value.ToString()?.ToLowerInvariant() == "true" ? "ON" : "OFF";
+                    }
 
-            await this.PublishStateAsync(
-                conduct.Target.Identifier,
-                conduct.Target.Contact,
-                value,
-                cancellationToken);
+                    await this.PublishStateAsync(
+                        conduct.Target.Identifier,
+                        conduct.Target.Contact,
+                        value,
+                        cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conduct}", conduct);
+                    this.logger.LogWarning("Failed to execute conduct {@Conduct}", conduct);
+                }
+            }
         }
 
         private async Task MessageHandler(MqttMessage message, CancellationToken cancellationToken)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,7 @@ namespace Signal.Beacon.Application
         }
 
 
-        public IDisposable Subscribe(Func<DeviceTarget, CancellationToken, Task> handler) => 
+        public IDisposable Subscribe(Func<IEnumerable<DeviceTarget>, CancellationToken, Task> handler) => 
             this.deviceStateHub.Subscribe(this, handler);
 
         internal void SetLocalState(DeviceTarget target, object? value) => this.states.AddOrSet(target, value);

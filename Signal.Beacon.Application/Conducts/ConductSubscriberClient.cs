@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Conducts;
@@ -16,7 +17,7 @@ namespace Signal.Beacon.Application.Conducts
         }
 
 
-        public void Subscribe(string channel, Func<Conduct, CancellationToken, Task> handler)
+        public void Subscribe(string channel, Func<IEnumerable<Conduct>, CancellationToken, Task> handler)
         {
             this.conductManager.Subscribe(channel, handler);
         }

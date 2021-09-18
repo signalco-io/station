@@ -14,14 +14,14 @@ namespace Signal.Beacon.Application.PubSub
         }
 
         private TopicHandler CreateHandler(object subscriber, IEnumerable<string> filters,
-            Func<TData, CancellationToken, Task> handler) =>
+            Func<IEnumerable<TData>, CancellationToken, Task> handler) =>
             new(this, subscriber, filters, handler);
 
-        public IDisposable Subscribe(IEnumerable<string> filters, Func<TData, CancellationToken, Task> handler) =>
+        public IDisposable Subscribe(IEnumerable<string> filters, Func<IEnumerable<TData>, CancellationToken, Task> handler) =>
             this.Subscribe(this, filters, handler);
 
         public IDisposable Subscribe(object subscriber, IEnumerable<string> filters,
-            Func<TData, CancellationToken, Task> handler) =>
+            Func<IEnumerable<TData>, CancellationToken, Task> handler) =>
             this.SubscribeInternal(this.CreateHandler(subscriber, filters, handler));
 
         public virtual async Task PublishAsync(
@@ -32,10 +32,10 @@ namespace Signal.Beacon.Application.PubSub
             IEnumerable<Task> listenersExecutionTasks;
             lock (this.ListenersLock)
             {
-                listenersExecutionTasks = data.SelectMany(dataItem =>
-                    this.Listeners
-                        .Where(l => l.Filters.Contains(topic))
-                        .Select(l => l.Func(dataItem, cancellationToken)));
+                listenersExecutionTasks = this.Listeners
+                    .Where(l => l.Filters.Contains(topic))
+                    .Select(l => l.Func(data, cancellationToken))
+                    .ToList();
             }
 
             await this.WaitAllListeners(listenersExecutionTasks);
@@ -49,7 +49,7 @@ namespace Signal.Beacon.Application.PubSub
                 PubSubHubBase<TData, TopicHandler> owner, 
                 object subscriber, 
                 IEnumerable<string> filters,
-                Func<TData, CancellationToken, Task> func) : base(owner, subscriber, func)
+                Func<IEnumerable<TData>, CancellationToken, Task> func) : base(owner, subscriber, func)
             {
                 this.Filters = filters.ToList();
             }

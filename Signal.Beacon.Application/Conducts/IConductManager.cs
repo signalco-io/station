@@ -10,7 +10,7 @@ namespace Signal.Beacon.Application.Conducts
     {
         Task StartAsync(CancellationToken cancellationToken);
 
-        IDisposable Subscribe(string channel, Func<Conduct, CancellationToken, Task> handler);
+        IDisposable Subscribe(string channel, Func<IEnumerable<Conduct>, CancellationToken, Task> handler);
 
         Task PublishAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken);
     }
