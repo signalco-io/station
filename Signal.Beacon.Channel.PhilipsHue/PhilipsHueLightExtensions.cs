@@ -5,23 +5,14 @@ namespace Signal.Beacon.Channel.PhilipsHue
 {
     internal static class PhilipsHueLightExtensions
     {
-        public static PhilipsHueLight AsPhilipsHueLight(this Light light, string bridgeId)
-        {
-            // Correct invalid color temperature (not discovered for non Philips lights)
-            var min = light.Capabilities.Control.ColorTemperature.Min;
-            var max = light.Capabilities.Control.ColorTemperature.Max;
-            if (min == 0 && max == ushort.MaxValue)
-            {
-                min = 2000;
-                max = 6500;
-            }
-
-            return new(
+        public static PhilipsHueLight AsPhilipsHueLight(this Light light, string bridgeId) =>
+            new(
                 light.UniqueId, light.Id, bridgeId,
                 new PhilipsHueLight.PhilipsHueLightState(
                     light.State.On,
-                    light.State.ColorTemperature?.Normalize(min, max),
+                    light.State.ColorTemperature?.Normalize(
+                        light.Capabilities.Control.ColorTemperature.Min,
+                        light.Capabilities.Control.ColorTemperature.Max),
                     ((int)light.State.Brightness).Normalize(0, 255)));
-        }
     }
 }
