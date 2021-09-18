@@ -22,6 +22,7 @@ namespace Signalco.Station.Channel.MiFlora
     public class MiFloraWorkerService : IWorkerService
     {
         private readonly ILogger<MiFloraWorkerService> logger;
+        private static readonly SemaphoreSlim btLock = new SemaphoreSlim(0, 1);
 
         public MiFloraWorkerService(
             ILogger<MiFloraWorkerService> logger)
@@ -38,7 +39,7 @@ namespace Signalco.Station.Channel.MiFlora
         private async Task BeginDiscoveryAsync(CancellationToken cancellationToken)
         {
             this.logger.LogDebug("Started discovery...");
-
+            
             try
             {
                 var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
@@ -57,19 +58,20 @@ namespace Signalco.Station.Channel.MiFlora
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Discovery failed.");
+                this.logger.LogDebug(ex, "Discovery failed");
             }
         }
 
         private async Task adapter_DeviceFoundAsync(Adapter sender, DeviceFoundEventArgs args)
         {
             this.logger.LogDebug("BLE Device found: {DevicePath}", args.Device.ObjectPath);
-            
+
             // Attach to device callbacks
             args.Device.ServicesResolved += this.DeviceOnServicesResolved;
             args.Device.Connected += this.DeviceOnConnected;
             args.Device.Disconnected += this.DeviceOnDisconnected;
 
+            await btLock.WaitAsync();
             try
             {
                 this.logger.LogDebug("BLE Device: {DevicePath} connecting...", args.Device.ObjectPath);
@@ -78,30 +80,44 @@ namespace Signalco.Station.Channel.MiFlora
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}", args.Device.ObjectPath);
+                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
+                    args.Device.ObjectPath);
             }
+
+            btLock.Release();
+            
+            await btLock.WaitAsync();
 
             try
             {
                 this.logger.LogDebug("BLE Device: {DevicePath} reading services...", args.Device.ObjectPath);
                 var services = await args.Device.GetServicesAsync();
-                this.logger.LogDebug("BLE Device: {DevicePath} services: {@Services}", args.Device.ObjectPath, services);
+                this.logger.LogDebug("BLE Device: {DevicePath} services: {@Services}", args.Device.ObjectPath,
+                    services);
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}", args.Device.ObjectPath);
+                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
+                    args.Device.ObjectPath);
             }
 
-
+            btLock.Release();
+            
+            await btLock.WaitAsync();
+            
             try
             {
                 var properties = await args.Device.GetAllAsync();
-                this.logger.LogDebug("BLE Device: {DevicePath} properties: {@Properties}", args.Device.ObjectPath, properties);
+                this.logger.LogDebug("BLE Device: {DevicePath} properties: {@Properties}", args.Device.ObjectPath,
+                    properties);
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}", args.Device.ObjectPath);
+                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
+                    args.Device.ObjectPath);
             }
+
+            btLock.Release();
         }
 
         private async Task DeviceOnDisconnected(Device sender, BlueZEventArgs eventargs)
@@ -116,9 +132,27 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task DeviceOnServicesResolved(Device sender, BlueZEventArgs args)
         {
-            this.logger.LogDebug("BLE service resolver {State}", args.IsStateChange);
-            var services = await sender.GetServicesAsync();
-            this.logger.LogDebug("BLE Services: {@Services}", services);
+            await btLock.WaitAsync();
+
+            try
+            {
+                this.logger.LogDebug("BLE service resolver {State}", args.IsStateChange);
+                var services = await sender.GetServicesAsync();
+                this.logger.LogDebug("BLE Services: {@Services}", services);
+                foreach (var service in services)
+                {
+                    this.logger.LogDebug("Device: {DevicePath} Service: {Service} UUID: {Uuid}",
+                        sender.ObjectPath,
+                        service.ObjectPath,
+                        await service.GetUUIDAsync());
+                }
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(ex, "Failed to read services for device {DevicePath}", sender.ObjectPath);
+            }
+
+            btLock.Release();
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
