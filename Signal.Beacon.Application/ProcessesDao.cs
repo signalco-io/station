@@ -18,7 +18,12 @@ namespace Signal.Beacon.Application
     {
         private readonly ISignalProcessesClient processesClient;
         private readonly ILogger<ProcessesDao> logger;
+        
+        // Caching
         private readonly object cacheLock = new();
+        private DateTime? cacheTimeStamp;
+        private static readonly TimeSpan CacheValidPeriod = TimeSpan.FromMinutes(1);
+
         private readonly JsonSerializerSettings deserializationSettings;
         private List<Process>? processes;
         private List<Process>? stateTriggerProcesses;
@@ -83,7 +88,10 @@ namespace Signal.Beacon.Application
 
         private async Task CacheProcessesAsync(CancellationToken cancellationToken)
         {
-            if (this.processes != null)
+            // Don't cache again if we have cache, and cache valid period didn't expire
+            if (this.processes != null &&
+                this.cacheTimeStamp.HasValue &&
+                DateTime.UtcNow - this.cacheTimeStamp.Value <= CacheValidPeriod)
                 return;
             
             try
@@ -96,7 +104,9 @@ namespace Signal.Beacon.Application
 
                 lock (this.cacheLock)
                 {
-                    if (this.processes != null)
+                    if (this.processes != null &&
+                        this.cacheTimeStamp.HasValue &&
+                        DateTime.UtcNow - this.cacheTimeStamp.Value <= CacheValidPeriod)
                         return;
 
                     try
@@ -107,6 +117,7 @@ namespace Signal.Beacon.Application
 
                         // Invalidate dependency caches
                         this.stateTriggerProcesses = null;
+                        this.cacheTimeStamp = DateTime.UtcNow;
 
                         this.logger.LogDebug("Loaded {ProcessesCount} processes.", this.processes.Count);
                     }
