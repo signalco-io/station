@@ -56,6 +56,8 @@ fi
 echo "Installing dependencies..."
 sudo apt-get install -y make g++ gcc bluez jq mosquitto
 
+## TODO: Apply BT Fix: https://askubuntu.com/a/1166847
+
 ## Configure mosquitto
 ### TODO: Test this
 echo "listener 1883
