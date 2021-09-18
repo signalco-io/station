@@ -112,8 +112,8 @@ namespace Signal.Beacon.Channel.Samsung
         private async Task DiscoverDevices()
         {
             var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
-            var matchedHosts = this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, this.startCancellationToken);
-            await foreach (var hostInfo in matchedHosts.WithCancellation(this.startCancellationToken))
+            var matchedHosts = await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, this.startCancellationToken);
+            foreach (var hostInfo in matchedHosts)
             {
                 // Ignore if no open ports
                 if (!hostInfo.OpenPorts.Any()) continue;

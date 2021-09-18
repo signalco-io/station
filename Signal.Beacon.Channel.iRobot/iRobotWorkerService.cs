@@ -454,9 +454,9 @@ namespace Signal.Beacon.Channel.iRobot
             CancellationToken cancellationToken)
         {
             var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
-            var matchedHosts = this.hostInfoService.HostsAsync(ipAddressesInRange, new[] { 8883 }, cancellationToken);
+            var matchedHosts = await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] { 8883 }, cancellationToken);
             var potentialDevices = new List<(string ipAddress, string physicalAddress)>();
-            await foreach (var hostInfo in matchedHosts.WithCancellation(cancellationToken))
+            foreach (var hostInfo in matchedHosts)
             {
                 // Ignore if no open ports
                 if (!hostInfo.OpenPorts.Any()) continue;

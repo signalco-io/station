@@ -35,12 +35,12 @@ namespace Signal.Beacon.Application.Mqtt
             try
             {
                 var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
-                var applicableHosts = this.hostInfoService.HostsAsync(
+                var applicableHosts = await this.hostInfoService.HostsAsync(
                         ipAddressesInRange.Concat(new[] { "localhost" }),
                         new[] { 1883 }, cancellationToken);
 
                 // TODO: Discover all in parallel
-                await foreach (var applicableHost in applicableHosts.WithCancellation(cancellationToken))
+                foreach (var applicableHost in applicableHosts)
                 {
                     try
                     {

@@ -6,7 +6,7 @@ namespace Signal.Beacon.Core.Network
 {
     public interface IHostInfoService
     {
-        IAsyncEnumerable<IHostInfo> HostsAsync(
+        Task<IEnumerable<IHostInfo>> HostsAsync(
             IEnumerable<string> ipAddresses,
             int[] scanPorts,
             CancellationToken cancellationToken);

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,33 +22,29 @@ namespace Signal.Beacon.Application.Network
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async IAsyncEnumerable<IHostInfo> HostsAsync(
+        public async Task<IEnumerable<IHostInfo>> HostsAsync(
             IEnumerable<string> ipAddresses,
             int[] scanPorts,
-            [EnumeratorCancellation] CancellationToken cancellationToken)
+            CancellationToken cancellationToken)
         {
-            var arpResult = (await ArpLookupAsync()).ToList();
-            if (cancellationToken.IsCancellationRequested)
-                yield break;
+            var arpResult = await ArpLookupAsync();
+            var pingResults = await Task
+                .WhenAll(ipAddresses.Select(async address =>
+                {
+                    var arpLookupResult = arpResult.FirstOrDefault(a => a.ip == address);
+                    var hostInfo = await this.GetHostInformationAsync(
+                        address,
+                        scanPorts,
+                        arpLookupResult.physical,
+                        cancellationToken);
 
-            foreach (var address in ipAddresses)
-            {
-                if (cancellationToken.IsCancellationRequested) 
-                    yield break;
+                    if (hostInfo != null)
+                        this.logger.LogDebug("Host: {@Host}", hostInfo);
 
-                var arpLookupResult = arpResult.FirstOrDefault(a => a.ip == address);
-                var hostInfo = await this.GetHostInformationAsync(
-                    address,
-                    scanPorts,
-                    arpLookupResult.physical,
-                    cancellationToken);
-                if (hostInfo == null) 
-                    continue;
-
-                this.logger.LogDebug("Host: {@Host}", hostInfo);
-
-                yield return hostInfo;
-            }
+                    return hostInfo;
+                }))
+                .ConfigureAwait(false);
+            return pingResults.Where(i => i != null).Select(i => i!).ToList();
         }
 
         private async Task<string?> ResolveHostNameAsync(string ipAddress)
@@ -75,7 +70,7 @@ namespace Signal.Beacon.Application.Network
             if (ping == null)
                 return null;
 
-            var portPing = Math.Min(3000, Math.Max(100, ping.Value * 2)); // Adaptive port connection timeout based on ping value
+            var portPing = Math.Min(3000, Math.Max(500, ping.Value * 100)); // Adaptive port connection timeout based on ping value
             var openPorts = (await OpenPortsAsync(address, applicablePorts, TimeSpan.FromMilliseconds(portPing))).ToList();
             var hostName = await this.ResolveHostNameAsync(address);
 
@@ -127,7 +122,7 @@ namespace Signal.Beacon.Application.Network
             }
         }
 
-        private async Task<long?> PingIpAddressAsync(string address, CancellationToken cancellationToken, int timeout = 2000, int retry = 3)
+        private async Task<long?> PingIpAddressAsync(string address, CancellationToken cancellationToken, int timeout = 1000, int retry = 2)
         {
             using var ping = new Ping();
             var tryCount = 0;
