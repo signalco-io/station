@@ -183,7 +183,7 @@ namespace Signal.Beacon.Channel.Samsung
         private async Task ConnectWsRemoteAsync()
         {
             this.client = this.ConnectWsEndpoint(this.configuration.IpAddress, 8002,
-                "/channels/samsung.remote.control", "Signal", this.configuration.Token);
+                "/channels/samsung.remote.control", "Signalco", this.configuration.Token);
             this.client.MessageReceived.Subscribe(this.HandleTvRemoteMessage);
             await this.client.Start();
         }

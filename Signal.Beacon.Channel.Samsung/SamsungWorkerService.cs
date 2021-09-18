@@ -112,11 +112,12 @@ namespace Signal.Beacon.Channel.Samsung
         private async Task DiscoverDevices()
         {
             var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
-            var matchedHosts =
-                await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, this.startCancellationToken);
-            var hostsWithPort = matchedHosts.Where(mh => mh.OpenPorts.Count() == 1);
-            foreach (var hostInfo in hostsWithPort)
+            var matchedHosts = this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, this.startCancellationToken);
+            await foreach (var hostInfo in matchedHosts.WithCancellation(this.startCancellationToken))
             {
+                // Ignore if no open ports
+                if (!hostInfo.OpenPorts.Any()) continue;
+
                 if (string.IsNullOrWhiteSpace(hostInfo.PhysicalAddress))
                 {
                     this.logger.LogDebug("Device MAC not found. Ip: {IpAddress}", hostInfo.IpAddress);

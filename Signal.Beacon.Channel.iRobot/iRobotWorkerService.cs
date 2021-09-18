@@ -454,13 +454,13 @@ namespace Signal.Beacon.Channel.iRobot
             CancellationToken cancellationToken)
         {
             var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
-            var matchedHosts =
-                await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] { 8883 }, cancellationToken);
-            var hostsWithPort = matchedHosts.Where(mh => mh.OpenPorts.Count() == 1);
-
+            var matchedHosts = this.hostInfoService.HostsAsync(ipAddressesInRange, new[] { 8883 }, cancellationToken);
             var potentialDevices = new List<(string ipAddress, string physicalAddress)>();
-            foreach (var hostInfo in hostsWithPort)
+            await foreach (var hostInfo in matchedHosts.WithCancellation(cancellationToken))
             {
+                // Ignore if no open ports
+                if (!hostInfo.OpenPorts.Any()) continue;
+
                 if (string.IsNullOrWhiteSpace(hostInfo.PhysicalAddress))
                 {
                     this.logger.LogDebug("Device MAC not found. Ip: {IpAddress}", hostInfo.IpAddress);
