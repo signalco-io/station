@@ -74,11 +74,24 @@ namespace Signalco.Station.Channel.MiFlora
             {
                 this.logger.LogDebug("BLE Device: {DevicePath} connecting...", args.Device.ObjectPath);
                 await args.Device.ConnectAsync();
+                this.logger.LogDebug("BLE Device: {DevicePath} connected", args.Device.ObjectPath);
             }
             catch (Exception ex)
             {
                 this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}", args.Device.ObjectPath);
             }
+
+            try
+            {
+                this.logger.LogDebug("BLE Device: {DevicePath} reading services...", args.Device.ObjectPath);
+                var services = await args.Device.GetServicesAsync();
+                this.logger.LogDebug("BLE Device: {DevicePath} services: {@Services}", args.Device.ObjectPath, services);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}", args.Device.ObjectPath);
+            }
+
 
             try
             {
