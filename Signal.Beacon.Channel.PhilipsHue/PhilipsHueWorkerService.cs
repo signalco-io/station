@@ -114,6 +114,9 @@ namespace Signal.Beacon.Channel.PhilipsHue
                                     if (!double.TryParse(conduct.Value.ToString(), out var temp))
                                         throw new Exception("Invalid temperature contact value.");
 
+                                    this.logger.LogDebug("Light ColorTemperature min/max: {Min}, {Max}",
+                                        bridgeLight.Capabilities.Control.ColorTemperature.Min,
+                                        bridgeLight.Capabilities.Control.ColorTemperature.Max);
                                     lightCommand.ColorTemperature = (int)temp.Denormalize(
                                         bridgeLight.Capabilities.Control.ColorTemperature.Min,
                                         bridgeLight.Capabilities.Control.ColorTemperature.Max);
