@@ -8,22 +8,20 @@ namespace Signal.Beacon.Channel.PhilipsHue
         {
             var nMin = kelvinMin;
             var nMax = kelvinMax;
-            if (nMin == 0 && kelvinMax == ushort.MaxValue)
+            if (nMin <= 0 && nMax >= ushort.MaxValue)
             {
                 nMin = 2000;
                 nMax = 6500;
             }
 
-            return mirek.Denormalize(nMin, nMax).KelvinToMirek();
+            return (int)(1000000 / mirek.Denormalize(nMin, nMax));
         }
-
-        private static int KelvinToMirek(this double kelvin) => (int)(1000000 / kelvin);
 
         public static double? MirekToNormalized(this int? mirek, int kelvinMin, int kelvinMax)
         {
             var nMin = kelvinMin;
             var nMax = kelvinMax;
-            if (kelvinMin == 0 && kelvinMax == ushort.MaxValue)
+            if (nMin <= 0 && nMax >= ushort.MaxValue)
             {
                 nMin = 2000;
                 nMax = 6500;
