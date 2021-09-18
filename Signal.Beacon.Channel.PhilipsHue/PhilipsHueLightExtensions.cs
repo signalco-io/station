@@ -10,7 +10,7 @@ namespace Signal.Beacon.Channel.PhilipsHue
                 light.UniqueId, light.Id, bridgeId,
                 new PhilipsHueLight.PhilipsHueLightState(
                     light.State.On,
-                    light.State.ColorTemperature?.Normalize(
+                    light.State.ColorTemperature.MirekToNormalized(
                         light.Capabilities.Control.ColorTemperature.Min,
                         light.Capabilities.Control.ColorTemperature.Max),
                     ((int)light.State.Brightness).Normalize(0, 255)));

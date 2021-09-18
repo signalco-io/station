@@ -114,9 +114,10 @@ namespace Signal.Beacon.Channel.PhilipsHue
                                     if (!double.TryParse(conduct.Value.ToString(), out var temp))
                                         throw new Exception("Invalid temperature contact value.");
 
-                                    lightCommand.ColorTemperature = (int)temp.Denormalize(
-                                        bridgeLight.Capabilities.Control.ColorTemperature.Min,
-                                        bridgeLight.Capabilities.Control.ColorTemperature.Max);
+                                    lightCommand.ColorTemperature = temp
+                                        .NormalizedToMirek(
+                                            bridgeLight.Capabilities.Control.ColorTemperature.Min,
+                                            bridgeLight.Capabilities.Control.ColorTemperature.Max);
                                     break;
                                 case BrightnessContactName:
                                     if (!double.TryParse(conduct.Value.ToString(), out var brightness))
