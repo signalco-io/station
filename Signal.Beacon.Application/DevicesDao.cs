@@ -77,7 +77,10 @@ namespace Signal.Beacon.Application
 
         public void InvalidateDevice()
         {
-            this.devices = null;
+            lock (this.cacheLock)
+            {
+                this.devices = null;
+            }
 
             this.logger.LogDebug("Devices cache invalidated");
         }
