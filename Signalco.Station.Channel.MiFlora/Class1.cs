@@ -39,7 +39,6 @@ namespace Signalco.Station.Channel.MiFlora
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             this.startCancellationToken = cancellationToken;
-            _ = Task.Run(() => this.BeginDiscoveryAsync(cancellationToken), cancellationToken);
             _ = Task.Run(() => this.PoolDevicesLoop(cancellationToken), cancellationToken);
         }
 
@@ -49,13 +48,13 @@ namespace Signalco.Station.Channel.MiFlora
             
             try
             {
-                this.adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
+                this.adapter = (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken)).FirstOrDefault();
                 if (this.adapter == null)
                     throw new Exception("No BT adapter available.");
                 this.logger.LogDebug("Using adapter: {AdapterName}", this.adapter.ObjectPath);
 
                 // Start device discovery
-                await this.adapter.StartDiscoveryAsync();
+                await this.adapter.StartDiscoveryAsync().WaitAsync(TimeSpan.FromMinutes(1), cancellationToken);
             }
             catch (Exception ex)
             {
@@ -65,6 +64,8 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task PoolDevicesLoop(CancellationToken cancellationToken)
         {
+            await this.BeginDiscoveryAsync(cancellationToken);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 await this.ProcessDevicesAsync(cancellationToken);
