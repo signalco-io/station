@@ -130,7 +130,9 @@ namespace Signalco.Station.Channel.MiFlora
                         !deviceName.Contains("Flower care"))
                     {
                         this.ignoredDevices.Add(btDevice.ObjectPath.ToString());
-                        this.logger.LogDebug("BLE Device {DevicePath} added to ignored devices because it didn't match", btDevice.ObjectPath);
+                        this.logger.LogDebug(
+                            "BLE Device {DevicePath} added to ignored devices because it didn't match",
+                            btDevice.ObjectPath);
                         return;
                     }
 
@@ -141,7 +143,7 @@ namespace Signalco.Station.Channel.MiFlora
                     var deviceConfig = new DeviceDiscoveredCommand(
                         deviceName,
                         $"{MiFloraChannels.MiFlora}/{await btDevice.GetAddressAsync()}");
-                    
+
                     await this.deviceDiscoveryHandler.HandleAsync(deviceConfig, cancellationToken);
                 }
 
@@ -196,7 +198,7 @@ namespace Signalco.Station.Channel.MiFlora
                     this.logger.LogTrace("Flora sensor data: {@Data}", sensorDataValue);
 
                     // Parse sensor data
-                    var temperature = (short)(sensorDataValue[1] << 8 | sensorDataValue[0]);
+                    var temperature = (short)(sensorDataValue[1] << 8 | sensorDataValue[0]) / 10d;
                     var moisture = (int)sensorDataValue[7];
                     var light = sensorDataValue[3] + sensorDataValue[4] * 256;
                     var conductivity = sensorDataValue[8] + sensorDataValue[9] * 256;
