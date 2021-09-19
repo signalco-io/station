@@ -23,6 +23,7 @@ namespace Signalco.Station.Channel.MiFlora
     {
         private readonly ILogger<MiFloraWorkerService> logger;
         private static readonly SemaphoreSlim btLock = new SemaphoreSlim(1, 1);
+        private CancellationToken startCancellationToken;
 
         public MiFloraWorkerService(
             ILogger<MiFloraWorkerService> logger)
@@ -33,6 +34,7 @@ namespace Signalco.Station.Channel.MiFlora
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
+            this.startCancellationToken = cancellationToken;
             _ = Task.Run(() => this.BeginDiscoveryAsync(cancellationToken), cancellationToken);
         }
 
@@ -52,7 +54,7 @@ namespace Signalco.Station.Channel.MiFlora
                 var devices = await adapter.GetDevicesAsync();
                 foreach (var device in devices)
                 {
-                    await ProcessDevice(device);
+                    await ProcessDevice(device, cancellationToken);
                 }
                 
                 adapter.DeviceFound += this.adapter_DeviceFoundAsync;
@@ -71,103 +73,93 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task adapter_DeviceFoundAsync(Adapter sender, DeviceFoundEventArgs args)
         {
-            await ProcessDevice(args.Device);
+            await this.ProcessDevice(args.Device, this.startCancellationToken);
         }
 
-        private async Task ProcessDevice(Device device)
+        private async Task ProcessDevice(Device device, CancellationToken cancellationToken)
         {
             this.logger.LogDebug("BLE Device: {DevicePath}", device.ObjectPath);
 
-            // Attach to device callbacks
-            // device.ServicesResolved += this.DeviceOnServicesResolved;
-            // device.Connected += this.DeviceOnConnected;
-            // device.Disconnected += this.DeviceOnDisconnected;
 
-            // await btLock.WaitAsync();
-            //
-            // try
-            // {
-            //     this.logger.LogDebug("BLE Device: {DevicePath} connecting...", args.Device.ObjectPath);
-            //     await args.Device.ConnectAsync();
-            //     this.logger.LogDebug("BLE Device: {DevicePath} connected", args.Device.ObjectPath);
-            // }
-            // catch (Exception ex)
-            // {
-            //     this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
-            //         args.Device.ObjectPath);
-            // }
-            //
-            // btLock.Release();
-
-            // await btLock.WaitAsync();
-            //
-            // try
-            // {
-            //     this.logger.LogDebug("BLE Device: {DevicePath} reading services...", args.Device.ObjectPath);
-            //     var services = await args.Device.GetServicesAsync();
-            //     this.logger.LogDebug("BLE Device: {DevicePath} services: {@Services}", args.Device.ObjectPath,
-            //         services);
-            // }
-            // catch (Exception ex)
-            // {
-            //     this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
-            //         args.Device.ObjectPath);
-            // }
-            //
-            // btLock.Release();
-
-            await btLock.WaitAsync();
+            await btLock.WaitAsync(cancellationToken);
 
             try
             {
-                var properties = await device.GetAllAsync();
-                this.logger.LogDebug("BLE Device: {DevicePath} properties: {@Properties}", device.ObjectPath,
-                    properties);
-                this.logger.LogDebug("BLE device Alias: {Value}", properties.Alias);
-                this.logger.LogDebug("BLE device Address: {Value}", properties.Address);
+                // Wait for name property at most N seconds
+                var deviceNameTask = device
+                    .GetAsync<string>("Name")
+                    .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
-                // Ignore if not flower care
-                if (!properties.Name.Contains("Flower care") &&
-                    !properties.Alias.Contains("Flower care"))
-                {
+                // Ignore if not flower care or did not respond in time
+                if (!deviceNameTask.IsCompletedSuccessfully || 
+                    string.IsNullOrWhiteSpace(deviceNameTask.Result) ||
+                    !deviceNameTask.Result.Contains("Flower care"))
                     return;
-                }
-
-                // Try to connect
-                await device.ConnectAsync();
 
                 try
                 {
-                    var floraService = await device.GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb");
-                    this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
+                    // Try to connect
+                    await device.ConnectAsync();
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogDebug(ex, "Failed to connect to device {DevicePath}", device.ObjectPath);
+                    return;
+                }
 
-                    var sensorData = await floraService.GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb");
-                    this.logger.LogDebug("Flora sensor characteristic retrieved {Path}", sensorData.ObjectPath);
-                    var sensorDataValue = await sensorData.ReadValueAsync(TimeSpan.FromSeconds(5));
+                try
+                {
+                    // Try to retrieve service
+                    var floraService = device
+                        .GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb")
+                        .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    if (!floraService.IsCompletedSuccessfully)
+                        throw new Exception("Flora service timed out");
+
+                    var sensorData = floraService.Result
+                        .GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb")
+                        .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    if (!floraService.IsCompletedSuccessfully)
+                        throw new Exception("Flora sensor characteristic timed out");
+                    
+                    var sensorDataValue = await sensorData.Result.ReadValueAsync(TimeSpan.FromSeconds(10));
                     this.logger.LogDebug("Flora sensor data: {@Data}", sensorDataValue);
                     
-                    
+                    // TODO: Parse sensor data
 
-                    var versionBattery =
-                        await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
-                    this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
-                    var versionBatteryValue = await versionBattery.ReadValueAsync(TimeSpan.FromSeconds(5));
-                    this.logger.LogDebug("Flora version and battery data: {@Data}", versionBatteryValue);
+                    //var versionBattery =
+                    //    await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
+                    //this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
+                    //var versionBatteryValue = await versionBattery.ReadValueAsync(TimeSpan.FromSeconds(5));
+                    //this.logger.LogDebug("Flora version and battery data: {@Data}", versionBatteryValue);
+
+                    // TODO: Parse version and battery data
                 }
                 catch (Exception ex)
                 {
                     this.logger.LogDebug(ex, "Failed to retrieve device {DevicePath} data", device.ObjectPath);
                 }
 
-                await device.DisconnectAsync();
+                try
+                {
+                    await device.DisconnectAsync();
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogWarning(ex, "Failed to disconnect from device {DevicePath}", device.ObjectPath);
+                }
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
+                this.logger.LogDebug(
+                    ex, 
+                    "Failed to process device {DevicePath}",
                     device.ObjectPath);
             }
-
-            btLock.Release();
+            finally
+            {
+                btLock.Release();
+            }
         }
 
         private async Task DeviceOnDisconnected(Device sender, BlueZEventArgs eventargs)
