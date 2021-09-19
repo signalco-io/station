@@ -7,6 +7,8 @@ using HashtagChris.DotNetBlueZ;
 using HashtagChris.DotNetBlueZ.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Signal.Beacon.Core.Architecture;
+using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Workers;
 
 namespace Signalco.Station.Channel.MiFlora
@@ -20,18 +22,35 @@ namespace Signalco.Station.Channel.MiFlora
         }
     }
 
-    public class MiFloraWorkerService : IWorkerService
+    internal class MiFloraChannels
     {
+        public const string MiFlora = "miflora";
+    }
+
+    internal class MiFloraWorkerService : IWorkerService
+    {
+        private readonly IDevicesDao devicesDao;
+        private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
+        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
+        private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
         private readonly ILogger<MiFloraWorkerService> logger;
         private static readonly SemaphoreSlim btLock = new(1, 1);
         private CancellationToken startCancellationToken;
         private Adapter? adapter;
-        private List<string> knownDevices = new();
-        private List<string> ignoredDevices = new();
+        private readonly List<string> knownDevices = new();
+        private readonly List<string> ignoredDevices = new();
 
         public MiFloraWorkerService(
+            IDevicesDao devicesDao,
+            ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
+            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
+            ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
             ILogger<MiFloraWorkerService> logger)
         {
+            this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
+            this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
+            this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -84,63 +103,79 @@ namespace Signalco.Station.Channel.MiFlora
                 await this.ProcessDeviceAsync(device, cancellationToken);
         }
 
-        private async Task ProcessDeviceAsync(IDevice1 device, CancellationToken cancellationToken)
+        private async Task ProcessDeviceAsync(IDevice1 btDevice, CancellationToken cancellationToken)
         {
             await btLock.WaitAsync(cancellationToken);
 
             try
             {
                 // Skip if in ignored devices list
-                if (this.ignoredDevices.Contains(device.ObjectPath.ToString()))
+                if (this.ignoredDevices.Contains(btDevice.ObjectPath.ToString()))
                 {
-                    this.logger.LogTrace("BLE Device {DevicePath} ignored", device.ObjectPath);
+                    this.logger.LogTrace("BLE Device {DevicePath} ignored", btDevice.ObjectPath);
                     return;
                 }
 
                 // See if this is device we are interested info and add it to known devices list
-                if (!this.knownDevices.Contains(device.ObjectPath.ToString()))
+                if (!this.knownDevices.Contains(btDevice.ObjectPath.ToString()))
                 {
                     // Wait for name property at most N seconds
-                    this.logger.LogDebug("BLE Device: {DevicePath} discovery...", device.ObjectPath);
-                    var deviceNameTask = await device
+                    this.logger.LogDebug("BLE Device: {DevicePath} discovery...", btDevice.ObjectPath);
+                    var deviceName = await btDevice
                         .GetAsync<string>("Name")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
                     // Ignore if not flower care or did not respond in time
-                    if (string.IsNullOrWhiteSpace(deviceNameTask) ||
-                        !deviceNameTask.Contains("Flower care"))
+                    if (string.IsNullOrWhiteSpace(deviceName) ||
+                        !deviceName.Contains("Flower care"))
                     {
-                        this.ignoredDevices.Add(device.ObjectPath.ToString());
-                        this.logger.LogTrace("BLE Device {DevicePath} added to ignored devices because it didn't match", device.ObjectPath);
+                        this.ignoredDevices.Add(btDevice.ObjectPath.ToString());
+                        this.logger.LogDebug("BLE Device {DevicePath} added to ignored devices because it didn't match", btDevice.ObjectPath);
                         return;
                     }
 
-                    this.knownDevices.Add(device.ObjectPath.ToString());
-                    this.logger.LogTrace("BLE Device {DevicePath} added to known devices", device.ObjectPath);
+                    this.knownDevices.Add(btDevice.ObjectPath.ToString());
+                    this.logger.LogDebug("BLE Device {DevicePath} added to known devices", btDevice.ObjectPath);
+
+                    // Discover device
+                    var deviceConfig = new DeviceDiscoveredCommand(
+                        deviceName,
+                        $"{MiFloraChannels.MiFlora}/{await btDevice.GetAddressAsync()}");
+                    
+                    await this.deviceDiscoveryHandler.HandleAsync(deviceConfig, cancellationToken);
                 }
 
                 // Skip if device is not in known devices list
-                if (!this.knownDevices.Contains(device.ObjectPath.ToString()))
+                if (!this.knownDevices.Contains(btDevice.ObjectPath.ToString()))
                 {
-                    this.logger.LogTrace("BLE Device {DevicePath} ignored", device.ObjectPath);
+                    this.logger.LogTrace("BLE Device {DevicePath} ignored", btDevice.ObjectPath);
+                    return;
+                }
+
+                // Retrieve device from DAO
+                var deviceIdentifier = $"{MiFloraChannels.MiFlora}/{await btDevice.GetAddressAsync()}";
+                var device = await this.devicesDao.GetAsync(deviceIdentifier, cancellationToken);
+                if (device == null)
+                {
+                    this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", deviceIdentifier);
                     return;
                 }
 
                 try
                 {
                     // Try to connect
-                    await device.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    await btDevice.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogDebug(ex, "Failed to connect to device {DevicePath}", device.ObjectPath);
+                    this.logger.LogDebug(ex, "Failed to connect to device {DevicePath}", btDevice.ObjectPath);
                     return;
                 }
 
                 try
                 {
                     // Try to retrieve service
-                    var floraService = await device
+                    var floraService = await btDevice
                         .GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
@@ -166,7 +201,7 @@ namespace Signalco.Station.Channel.MiFlora
                     var light = sensorDataValue[3] + sensorDataValue[4] * 256;
                     var conductivity = sensorDataValue[8] + sensorDataValue[9] * 256;
 
-                    this.logger.LogDebug("Moisture: {MoistureValue}, Light: {LightValue}, Conductivity: {ConductivityValue}", moisture, light, conductivity);
+                    this.logger.LogDebug("Moisture: {MoistureValue}, Light: {LightValue}, Conductivity: {ConductivityValue}, Temperature: {TemperatureValue}", moisture, light, conductivity, temperature);
 
                     // Validate values
                     if (temperature is < -30 or > 80 ||
@@ -177,9 +212,41 @@ namespace Signalco.Station.Channel.MiFlora
                         // TODO: Invalidate read
                         this.logger.LogDebug(
                             "Ignored values of device {DevicePath} because they are out of range",
-                            device.ObjectPath);
+                            btDevice.ObjectPath);
                         return;
                     }
+
+                    // Discover contacts
+                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                        device, MiFloraChannels.MiFlora, "temperature",
+                        c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                        cancellationToken);
+                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                            device, MiFloraChannels.MiFlora, "moisture",
+                            c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                        cancellationToken);
+                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                            device, MiFloraChannels.MiFlora, "light",
+                            c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                        cancellationToken);
+                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                            device, MiFloraChannels.MiFlora, "conductivity",
+                            c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                        cancellationToken);
+
+                    // Set values
+                    await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
+                            new DeviceTarget(MiFloraChannels.MiFlora, deviceIdentifier, "temperature"), temperature),
+                        cancellationToken);
+                    await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
+                            new DeviceTarget(MiFloraChannels.MiFlora, deviceIdentifier, "moisture"), moisture),
+                        cancellationToken);
+                    await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
+                            new DeviceTarget(MiFloraChannels.MiFlora, deviceIdentifier, "light"), light),
+                        cancellationToken);
+                    await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
+                            new DeviceTarget(MiFloraChannels.MiFlora, deviceIdentifier, "conductivity"), conductivity),
+                        cancellationToken);
 
                     //var versionBattery =
                     //    await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
@@ -191,16 +258,16 @@ namespace Signalco.Station.Channel.MiFlora
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogDebug(ex, "Failed to retrieve device {DevicePath} data", device.ObjectPath);
+                    this.logger.LogDebug(ex, "Failed to retrieve device {DevicePath} data", btDevice.ObjectPath);
                 }
 
                 try
                 {
-                    await device.DisconnectAsync();
+                    await btDevice.DisconnectAsync();
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogWarning(ex, "Failed to disconnect from device {DevicePath}", device.ObjectPath);
+                    this.logger.LogWarning(ex, "Failed to disconnect from device {DevicePath}", btDevice.ObjectPath);
                 }
             }
             catch (Exception ex)
@@ -208,7 +275,7 @@ namespace Signalco.Station.Channel.MiFlora
                 this.logger.LogDebug(
                     ex, 
                     "Failed to process device {DevicePath}",
-                    device.ObjectPath);
+                    btDevice.ObjectPath);
             }
             finally
             {
