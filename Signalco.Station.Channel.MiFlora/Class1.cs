@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -116,6 +117,14 @@ namespace Signalco.Station.Channel.MiFlora
                         .GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
+                    // Force data mode
+                    var writeModel = await floraService.GetCharacteristicAsync("00001a00-0000-1000-8000-00805f9b34fb");
+                    await writeModel
+                        .WriteValueAsync(new byte[] { 0xA0, 0x1F }, new Dictionary<string, object>())
+                        .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    await Task.Delay(500, cancellationToken);
+
+                    // Read sensor data
                     var sensorData = await floraService
                         .GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
