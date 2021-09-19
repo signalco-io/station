@@ -86,14 +86,13 @@ namespace Signalco.Station.Channel.MiFlora
             try
             {
                 // Wait for name property at most N seconds
-                var deviceNameTask = device
+                var deviceNameTask = await device
                     .GetAsync<string>("Name")
                     .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
                 // Ignore if not flower care or did not respond in time
-                if (!deviceNameTask.IsCompletedSuccessfully ||
-                    string.IsNullOrWhiteSpace(deviceNameTask.Result) ||
-                    !deviceNameTask.Result.Contains("Flower care"))
+                if (string.IsNullOrWhiteSpace(deviceNameTask) ||
+                    !deviceNameTask.Contains("Flower care"))
                 {
                     this.logger.LogDebug("Task result: {@Task}", deviceNameTask);
                     return;
@@ -102,7 +101,7 @@ namespace Signalco.Station.Channel.MiFlora
                 try
                 {
                     // Try to connect
-                    await device.ConnectAsync();
+                    await device.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -113,19 +112,15 @@ namespace Signalco.Station.Channel.MiFlora
                 try
                 {
                     // Try to retrieve service
-                    var floraService = device
+                    var floraService = await device
                         .GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-                    if (!floraService.IsCompletedSuccessfully)
-                        throw new Exception("Flora service timed out");
 
-                    var sensorData = floraService.Result
+                    var sensorData = await floraService
                         .GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-                    if (!floraService.IsCompletedSuccessfully)
-                        throw new Exception("Flora sensor characteristic timed out");
                     
-                    var sensorDataValue = await sensorData.Result.ReadValueAsync(TimeSpan.FromSeconds(10));
+                    var sensorDataValue = await sensorData.ReadValueAsync(TimeSpan.FromSeconds(10));
                     this.logger.LogDebug("Flora sensor data: {@Data}", sensorDataValue);
 
                     // TODO: Parse sensor data
