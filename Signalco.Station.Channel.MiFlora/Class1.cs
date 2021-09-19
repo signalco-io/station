@@ -55,8 +55,8 @@ namespace Signalco.Station.Channel.MiFlora
                     await ProcessDevice(device);
                 }
                 
-                // adapter.DeviceFound += this.adapter_DeviceFoundAsync;
-                // await adapter.StartDiscoveryAsync();
+                adapter.DeviceFound += this.adapter_DeviceFoundAsync;
+                await adapter.StartDiscoveryAsync();
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -76,12 +76,12 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task ProcessDevice(Device device)
         {
-            this.logger.LogDebug("BLE Device found: {DevicePath}", device.ObjectPath);
+            this.logger.LogDebug("BLE Device: {DevicePath}", device.ObjectPath);
 
             // Attach to device callbacks
-            device.ServicesResolved += this.DeviceOnServicesResolved;
-            device.Connected += this.DeviceOnConnected;
-            device.Disconnected += this.DeviceOnDisconnected;
+            // device.ServicesResolved += this.DeviceOnServicesResolved;
+            // device.Connected += this.DeviceOnConnected;
+            // device.Disconnected += this.DeviceOnDisconnected;
 
             // await btLock.WaitAsync();
             //
@@ -144,13 +144,15 @@ namespace Signalco.Station.Channel.MiFlora
                     var sensorData = await floraService.GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb");
                     this.logger.LogDebug("Flora sensor characteristic retrieved {Path}", sensorData.ObjectPath);
                     var sensorDataValue = await sensorData.ReadValueAsync(TimeSpan.FromSeconds(5));
-                    this.logger.LogDebug("Flora sensor data: {Data}", sensorDataValue);
+                    this.logger.LogDebug("Flora sensor data: {@Data}", sensorDataValue);
+                    
+                    
 
                     var versionBattery =
                         await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
                     this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
                     var versionBatteryValue = await versionBattery.ReadValueAsync(TimeSpan.FromSeconds(5));
-                    this.logger.LogDebug("Flora version and battery data: {Data}", versionBatteryValue);
+                    this.logger.LogDebug("Flora version and battery data: {@Data}", versionBatteryValue);
                 }
                 catch (Exception ex)
                 {
