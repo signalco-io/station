@@ -140,11 +140,36 @@ namespace Signalco.Station.Channel.MiFlora
                     this.logger.LogDebug("BLE Device {DevicePath} added to known devices", btDevice.ObjectPath);
 
                     // Discover device
-                    var deviceConfig = new DeviceDiscoveredCommand(
-                        deviceName,
-                        $"{MiFloraChannels.MiFlora}/{await btDevice.GetAddressAsync()}");
-
+                    var identifier = $"{MiFloraChannels.MiFlora}/{await btDevice.GetAddressAsync()}";
+                    var deviceConfig = new DeviceDiscoveredCommand(deviceName, identifier);
                     await this.deviceDiscoveryHandler.HandleAsync(deviceConfig, cancellationToken);
+
+                    // Retrieve device
+                    var device = await this.devicesDao.GetAsync(identifier, cancellationToken);
+                    if (device == null)
+                    {
+                        this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", identifier);
+                    }
+                    else
+                    {
+                        // Discover contacts
+                        await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                                device, MiFloraChannels.MiFlora, "temperature",
+                                c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                            cancellationToken);
+                        await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                                device, MiFloraChannels.MiFlora, "moisture",
+                                c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                            cancellationToken);
+                        await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                                device, MiFloraChannels.MiFlora, "light",
+                                c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                            cancellationToken);
+                        await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                                device, MiFloraChannels.MiFlora, "conductivity",
+                                c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                            cancellationToken);
+                    }
                 }
 
                 // Skip if device is not in known devices list
@@ -156,13 +181,7 @@ namespace Signalco.Station.Channel.MiFlora
 
                 // Retrieve device from DAO
                 var deviceIdentifier = $"{MiFloraChannels.MiFlora}/{await btDevice.GetAddressAsync()}";
-                var device = await this.devicesDao.GetAsync(deviceIdentifier, cancellationToken);
-                if (device == null)
-                {
-                    this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", deviceIdentifier);
-                    return;
-                }
-
+                
                 try
                 {
                     // Try to connect
@@ -217,24 +236,6 @@ namespace Signalco.Station.Channel.MiFlora
                             btDevice.ObjectPath);
                         return;
                     }
-
-                    // Discover contacts
-                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
-                        device, MiFloraChannels.MiFlora, "temperature",
-                        c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
-                        cancellationToken);
-                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
-                            device, MiFloraChannels.MiFlora, "moisture",
-                            c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
-                        cancellationToken);
-                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
-                            device, MiFloraChannels.MiFlora, "light",
-                            c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
-                        cancellationToken);
-                    await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
-                            device, MiFloraChannels.MiFlora, "conductivity",
-                            c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
-                        cancellationToken);
 
                     // Set values
                     await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
