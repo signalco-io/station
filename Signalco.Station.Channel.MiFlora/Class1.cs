@@ -22,7 +22,7 @@ namespace Signalco.Station.Channel.MiFlora
     public class MiFloraWorkerService : IWorkerService
     {
         private readonly ILogger<MiFloraWorkerService> logger;
-        private static readonly SemaphoreSlim btLock = new SemaphoreSlim(0, 1);
+        private static readonly SemaphoreSlim btLock = new SemaphoreSlim(1, 1);
 
         public MiFloraWorkerService(
             ILogger<MiFloraWorkerService> logger)
@@ -72,6 +72,7 @@ namespace Signalco.Station.Channel.MiFlora
             args.Device.Disconnected += this.DeviceOnDisconnected;
 
             await btLock.WaitAsync();
+            
             try
             {
                 this.logger.LogDebug("BLE Device: {DevicePath} connecting...", args.Device.ObjectPath);
@@ -147,27 +148,27 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task DeviceOnServicesResolved(Device sender, BlueZEventArgs args)
         {
-            await btLock.WaitAsync();
-
-            try
-            {
-                this.logger.LogDebug("BLE service resolver {State}", args.IsStateChange);
-                var services = await sender.GetServicesAsync();
-                this.logger.LogDebug("BLE Services: {@Services}", services);
-                foreach (var service in services)
-                {
-                    this.logger.LogDebug("Device: {DevicePath} Service: {Service} UUID: {Uuid}",
-                        sender.ObjectPath,
-                        service.ObjectPath,
-                        await service.GetUUIDAsync());
-                }
-            }
-            catch (Exception ex)
-            {
-                this.logger.LogWarning(ex, "Failed to read services for device {DevicePath}", sender.ObjectPath);
-            }
-
-            btLock.Release();
+            // await btLock.WaitAsync();
+            //
+            // try
+            // {
+            //     this.logger.LogDebug("BLE service resolver {State}", args.IsStateChange);
+            //     var services = await sender.GetServicesAsync();
+            //     this.logger.LogDebug("BLE Services: {@Services}", services);
+            //     foreach (var service in services)
+            //     {
+            //         this.logger.LogDebug("Device: {DevicePath} Service: {Service} UUID: {Uuid}",
+            //             sender.ObjectPath,
+            //             service.ObjectPath,
+            //             await service.GetUUIDAsync());
+            //     }
+            // }
+            // catch (Exception ex)
+            // {
+            //     this.logger.LogWarning(ex, "Failed to read services for device {DevicePath}", sender.ObjectPath);
+            // }
+            //
+            // btLock.Release();
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
