@@ -196,7 +196,7 @@ namespace Signalco.Station.Channel.MiFlora
                     this.logger.LogTrace("Flora sensor data: {@Data}", sensorDataValue);
 
                     // Parse sensor data
-                    var temperature = (short)(sensorDataValue[0] << 8 | sensorDataValue[1]);
+                    var temperature = (short)(sensorDataValue[1] << 8 | sensorDataValue[0]);
                     var moisture = (int)sensorDataValue[7];
                     var light = sensorDataValue[3] + sensorDataValue[4] * 256;
                     var conductivity = sensorDataValue[8] + sensorDataValue[9] * 256;
