@@ -44,8 +44,7 @@ namespace Signalco.Station.Channel.MiFlora
             
             try
             {
-                var adapter = await BlueZManager.GetAdapterAsync("/org/bluez/hci0");
-                //var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
+                var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
                 if (adapter == null)
                     throw new Exception("No BT adapter available.");
                 this.logger.LogDebug("Using adapter: {AdapterName}", adapter.ObjectPath);
