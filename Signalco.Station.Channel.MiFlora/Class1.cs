@@ -128,8 +128,17 @@ namespace Signalco.Station.Channel.MiFlora
                     
                     var sensorDataValue = await sensorData.Result.ReadValueAsync(TimeSpan.FromSeconds(10));
                     this.logger.LogDebug("Flora sensor data: {@Data}", sensorDataValue);
-                    
+
                     // TODO: Parse sensor data
+                    //int16_t* temp_raw = (int16_t*)val;
+                    //float temperature = (*temp_raw) / ((float)10.0);
+                    //Serial.printf("-- Temperature: %f\n", temperature);
+
+                    int moisture = sensorDataValue[7];
+                    int light = sensorDataValue[3] + sensorDataValue[4] * 256;
+                    int conductivity = sensorDataValue[8] + sensorDataValue[9] * 256;
+                    
+                    this.logger.LogDebug("Moisture: {MoistureValue}, Light: {LightValue}, Conductivity: {ConductivityValue}", moisture, light, conductivity);
 
                     //var versionBattery =
                     //    await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
