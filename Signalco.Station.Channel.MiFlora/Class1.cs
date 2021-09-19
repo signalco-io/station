@@ -86,22 +86,22 @@ namespace Signalco.Station.Channel.MiFlora
 
             btLock.Release();
             
-            await btLock.WaitAsync();
-
-            try
-            {
-                this.logger.LogDebug("BLE Device: {DevicePath} reading services...", args.Device.ObjectPath);
-                var services = await args.Device.GetServicesAsync();
-                this.logger.LogDebug("BLE Device: {DevicePath} services: {@Services}", args.Device.ObjectPath,
-                    services);
-            }
-            catch (Exception ex)
-            {
-                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
-                    args.Device.ObjectPath);
-            }
-
-            btLock.Release();
+            // await btLock.WaitAsync();
+            //
+            // try
+            // {
+            //     this.logger.LogDebug("BLE Device: {DevicePath} reading services...", args.Device.ObjectPath);
+            //     var services = await args.Device.GetServicesAsync();
+            //     this.logger.LogDebug("BLE Device: {DevicePath} services: {@Services}", args.Device.ObjectPath,
+            //         services);
+            // }
+            // catch (Exception ex)
+            // {
+            //     this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
+            //         args.Device.ObjectPath);
+            // }
+            //
+            // btLock.Release();
             
             await btLock.WaitAsync();
             
@@ -110,6 +110,21 @@ namespace Signalco.Station.Channel.MiFlora
                 var properties = await args.Device.GetAllAsync();
                 this.logger.LogDebug("BLE Device: {DevicePath} properties: {@Properties}", args.Device.ObjectPath,
                     properties);
+                this.logger.LogDebug("BLE device Alias: {Value}", properties.Alias);
+                this.logger.LogDebug("BLE device Address: {Value}", properties.Address);
+
+                var floraService = await args.Device.GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb");
+                this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
+                
+                var sensorData = await floraService.GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb");
+                this.logger.LogDebug("Flora sensor characteristic retrieved {Path}", sensorData.ObjectPath);
+                var sensorDataValue = await sensorData.ReadValueAsync(TimeSpan.FromSeconds(5));
+                this.logger.LogDebug("Flora sensor data: {Data}", sensorDataValue);
+                
+                var versionBattery = await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
+                this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
+                var versionBatteryValue = await versionBattery.ReadValueAsync(TimeSpan.FromSeconds(5));
+                this.logger.LogDebug("Flora version and battery data: {Data}", versionBatteryValue);
             }
             catch (Exception ex)
             {
