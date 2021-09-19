@@ -71,21 +71,21 @@ namespace Signalco.Station.Channel.MiFlora
             args.Device.Connected += this.DeviceOnConnected;
             args.Device.Disconnected += this.DeviceOnDisconnected;
 
-            await btLock.WaitAsync();
-            
-            try
-            {
-                this.logger.LogDebug("BLE Device: {DevicePath} connecting...", args.Device.ObjectPath);
-                await args.Device.ConnectAsync();
-                this.logger.LogDebug("BLE Device: {DevicePath} connected", args.Device.ObjectPath);
-            }
-            catch (Exception ex)
-            {
-                this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
-                    args.Device.ObjectPath);
-            }
-
-            btLock.Release();
+            // await btLock.WaitAsync();
+            //
+            // try
+            // {
+            //     this.logger.LogDebug("BLE Device: {DevicePath} connecting...", args.Device.ObjectPath);
+            //     await args.Device.ConnectAsync();
+            //     this.logger.LogDebug("BLE Device: {DevicePath} connected", args.Device.ObjectPath);
+            // }
+            // catch (Exception ex)
+            // {
+            //     this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
+            //         args.Device.ObjectPath);
+            // }
+            //
+            // btLock.Release();
             
             // await btLock.WaitAsync();
             //
