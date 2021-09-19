@@ -169,6 +169,10 @@ namespace Signalco.Station.Channel.MiFlora
                                 device, MiFloraChannels.MiFlora, "conductivity",
                                 c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
                             cancellationToken);
+                        await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                                device, MiFloraChannels.MiFlora, "battery",
+                                c => c with { Access = DeviceContactAccess.Read, DataType = "double" }),
+                            cancellationToken);
                     }
                 }
 
@@ -251,13 +255,22 @@ namespace Signalco.Station.Channel.MiFlora
                             new DeviceTarget(MiFloraChannels.MiFlora, deviceIdentifier, "conductivity"), conductivity),
                         cancellationToken);
 
-                    //var versionBattery =
-                    //    await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
-                    //this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
-                    //var versionBatteryValue = await versionBattery.ReadValueAsync(TimeSpan.FromSeconds(5));
-                    //this.logger.LogDebug("Flora version and battery data: {@Data}", versionBatteryValue);
+                    // Get version and battery characteristic
+                    var versionBattery = await floraService
+                        .GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb")
+                        .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
-                    // TODO: Parse version and battery data
+                    // Read version and battery data
+                    var versionBatteryValue = await versionBattery.ReadValueAsync(TimeSpan.FromSeconds(5));
+                    this.logger.LogTrace("Flora version and battery data: {@Data}", versionBatteryValue);
+
+                    // Parse version and battery data
+                    var battery = versionBatteryValue[0] / 255d;
+
+                    // Set value
+                    await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
+                            new DeviceTarget(MiFloraChannels.MiFlora, deviceIdentifier, "battery"), battery),
+                        cancellationToken);
                 }
                 catch (Exception ex)
                 {
