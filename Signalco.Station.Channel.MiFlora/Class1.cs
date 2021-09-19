@@ -48,8 +48,15 @@ namespace Signalco.Station.Channel.MiFlora
 
                 // Start discovery
                 this.logger.LogDebug("Using adapter: {AdapterName}", adapter.ObjectPath);
-                adapter.DeviceFound += this.adapter_DeviceFoundAsync;
-                await adapter.StartDiscoveryAsync();
+
+                var devices = await adapter.GetDevicesAsync();
+                foreach (var device in devices)
+                {
+                    await ProcessDevice(device);
+                }
+                
+                // adapter.DeviceFound += this.adapter_DeviceFoundAsync;
+                // await adapter.StartDiscoveryAsync();
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -64,12 +71,17 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task adapter_DeviceFoundAsync(Adapter sender, DeviceFoundEventArgs args)
         {
-            this.logger.LogDebug("BLE Device found: {DevicePath}", args.Device.ObjectPath);
+            await ProcessDevice(args.Device);
+        }
+
+        private async Task ProcessDevice(Device device)
+        {
+            this.logger.LogDebug("BLE Device found: {DevicePath}", device.ObjectPath);
 
             // Attach to device callbacks
-            args.Device.ServicesResolved += this.DeviceOnServicesResolved;
-            args.Device.Connected += this.DeviceOnConnected;
-            args.Device.Disconnected += this.DeviceOnDisconnected;
+            device.ServicesResolved += this.DeviceOnServicesResolved;
+            device.Connected += this.DeviceOnConnected;
+            device.Disconnected += this.DeviceOnDisconnected;
 
             // await btLock.WaitAsync();
             //
@@ -86,7 +98,7 @@ namespace Signalco.Station.Channel.MiFlora
             // }
             //
             // btLock.Release();
-            
+
             // await btLock.WaitAsync();
             //
             // try
@@ -103,25 +115,25 @@ namespace Signalco.Station.Channel.MiFlora
             // }
             //
             // btLock.Release();
-            
+
             await btLock.WaitAsync();
-            
+
             try
             {
-                var properties = await args.Device.GetAllAsync();
-                this.logger.LogDebug("BLE Device: {DevicePath} properties: {@Properties}", args.Device.ObjectPath,
+                var properties = await device.GetAllAsync();
+                this.logger.LogDebug("BLE Device: {DevicePath} properties: {@Properties}", device.ObjectPath,
                     properties);
                 this.logger.LogDebug("BLE device Alias: {Value}", properties.Alias);
                 this.logger.LogDebug("BLE device Address: {Value}", properties.Address);
 
-                var floraService = await args.Device.GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb");
+                var floraService = await device.GetServiceAsync("00001204-0000-1000-8000-00805f9b34fb");
                 this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
-                
+
                 var sensorData = await floraService.GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb");
                 this.logger.LogDebug("Flora sensor characteristic retrieved {Path}", sensorData.ObjectPath);
                 var sensorDataValue = await sensorData.ReadValueAsync(TimeSpan.FromSeconds(5));
                 this.logger.LogDebug("Flora sensor data: {Data}", sensorDataValue);
-                
+
                 var versionBattery = await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
                 this.logger.LogDebug("Flora service retrieved {Path}", floraService.ObjectPath);
                 var versionBatteryValue = await versionBattery.ReadValueAsync(TimeSpan.FromSeconds(5));
@@ -130,7 +142,7 @@ namespace Signalco.Station.Channel.MiFlora
             catch (Exception ex)
             {
                 this.logger.LogDebug(ex, "Failed to get properties for device {DevicePath}",
-                    args.Device.ObjectPath);
+                    device.ObjectPath);
             }
 
             btLock.Release();
