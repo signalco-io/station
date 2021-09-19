@@ -44,19 +44,20 @@ namespace Signalco.Station.Channel.MiFlora
             
             try
             {
-                var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
+                var adapter = await BlueZManager.GetAdapterAsync("/org/bluez/hci0");
+                //var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
                 if (adapter == null)
                     throw new Exception("No BT adapter available.");
-
-                // Start discovery
                 this.logger.LogDebug("Using adapter: {AdapterName}", adapter.ObjectPath);
 
+                // Process known devices
                 var devices = await adapter.GetDevicesAsync();
                 foreach (var device in devices)
                 {
-                    await ProcessDevice(device, cancellationToken);
+                    await this.ProcessDevice(device, cancellationToken);
                 }
                 
+                // Start device discovery
                 adapter.DeviceFound += this.adapter_DeviceFoundAsync;
                 await adapter.StartDiscoveryAsync();
 
@@ -91,10 +92,13 @@ namespace Signalco.Station.Channel.MiFlora
                     .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
                 // Ignore if not flower care or did not respond in time
-                if (!deviceNameTask.IsCompletedSuccessfully || 
+                if (!deviceNameTask.IsCompletedSuccessfully ||
                     string.IsNullOrWhiteSpace(deviceNameTask.Result) ||
                     !deviceNameTask.Result.Contains("Flower care"))
+                {
+                    this.logger.LogDebug("Task result: {@Task}", deviceNameTask);
                     return;
+                }
 
                 try
                 {
