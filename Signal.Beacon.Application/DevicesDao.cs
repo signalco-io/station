@@ -75,6 +75,13 @@ namespace Signal.Beacon.Application
         public Task<object?> GetStateAsync(DeviceTarget deviceTarget, CancellationToken cancellationToken) => 
             this.deviceStateManager.Value.GetStateAsync(deviceTarget);
 
+        public void InvalidateDevice()
+        {
+            this.devices = null;
+
+            this.logger.LogDebug("Devices cache invalidated");
+        }
+
         private async Task CacheDevicesAsync(CancellationToken cancellationToken)
         {
             if (this.devices != null)

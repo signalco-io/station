@@ -47,6 +47,8 @@ namespace Signal.Beacon.Application
                     this.logger.LogInformation(
                         "New device discovered: {DeviceAlias} ({DeviceIdentifier}).",
                         command.Alias, command.Identifier);
+
+                    this.devicesDao.InvalidateDevice();
                 }
                 else
                 {
@@ -60,6 +62,8 @@ namespace Signal.Beacon.Application
                         this.logger.LogInformation(
                             "Updated device info: {DeviceAlias} ({DeviceIdentifier}).",
                             command.Alias, command.Identifier);
+
+                        this.devicesDao.InvalidateDevice();
                     }
                 }
                 
@@ -110,6 +114,8 @@ namespace Signal.Beacon.Application
 
                 // Update endpoints
                 await this.signalClient.UpdateDeviceEndpointsAsync(command.DeviceId, endpoints, cancellationToken);
+
+                this.devicesDao.InvalidateDevice();
 
                 this.logger.LogInformation(
                     "Device contact updated successfully: {DeviceId} ({DeviceIdentifier}) | {ChannelName} {ContactName}",

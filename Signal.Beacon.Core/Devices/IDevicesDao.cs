@@ -19,5 +19,7 @@ namespace Signal.Beacon.Core.Devices
         Task<DeviceContact?> GetInputContactAsync(DeviceTarget target, CancellationToken cancellationToken);
 
         Task<DeviceConfiguration?> GetByIdAsync(string deviceId, CancellationToken cancellationToken);
+
+        void InvalidateDevice();
     }
 }
