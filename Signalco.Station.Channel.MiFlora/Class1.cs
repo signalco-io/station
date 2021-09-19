@@ -23,8 +23,11 @@ namespace Signalco.Station.Channel.MiFlora
     public class MiFloraWorkerService : IWorkerService
     {
         private readonly ILogger<MiFloraWorkerService> logger;
-        private static readonly SemaphoreSlim btLock = new SemaphoreSlim(1, 1);
+        private static readonly SemaphoreSlim btLock = new(1, 1);
         private CancellationToken startCancellationToken;
+        private Adapter? adapter;
+        private List<string> knownDevices = new();
+        private List<string> ignoredDevices = new();
 
         public MiFloraWorkerService(
             ILogger<MiFloraWorkerService> logger)
@@ -37,6 +40,7 @@ namespace Signalco.Station.Channel.MiFlora
         {
             this.startCancellationToken = cancellationToken;
             _ = Task.Run(() => this.BeginDiscoveryAsync(cancellationToken), cancellationToken);
+            _ = Task.Run(() => this.PoolDevicesLoop(cancellationToken), cancellationToken);
         }
 
         private async Task BeginDiscoveryAsync(CancellationToken cancellationToken)
@@ -45,57 +49,79 @@ namespace Signalco.Station.Channel.MiFlora
             
             try
             {
-                var adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
-                if (adapter == null)
+                this.adapter = (await BlueZManager.GetAdaptersAsync()).FirstOrDefault();
+                if (this.adapter == null)
                     throw new Exception("No BT adapter available.");
-                this.logger.LogDebug("Using adapter: {AdapterName}", adapter.ObjectPath);
+                this.logger.LogDebug("Using adapter: {AdapterName}", this.adapter.ObjectPath);
 
-                // Process known devices
-                var devices = await adapter.GetDevicesAsync();
-                foreach (var device in devices)
-                {
-                    await this.ProcessDevice(device, cancellationToken);
-                }
-                
                 // Start device discovery
-                adapter.DeviceFound += this.adapter_DeviceFoundAsync;
-                await adapter.StartDiscoveryAsync();
-
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    Thread.Sleep(100);
-                }
+                await this.adapter.StartDiscoveryAsync();
             }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Discovery failed");
+                this.logger.LogDebug(ex, "Discovery start failed");
             }
         }
 
-        private async Task adapter_DeviceFoundAsync(Adapter sender, DeviceFoundEventArgs args)
+        private async Task PoolDevicesLoop(CancellationToken cancellationToken)
         {
-            await this.ProcessDevice(args.Device, this.startCancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await this.ProcessDevicesAsync(cancellationToken);
+                await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken);
+            }
         }
 
-        private async Task ProcessDevice(Device device, CancellationToken cancellationToken)
+        private async Task ProcessDevicesAsync(CancellationToken cancellationToken)
         {
-            this.logger.LogDebug("BLE Device: {DevicePath}", device.ObjectPath);
+            if (this.adapter == null)
+                return;
 
+            // Process known devices
+            var devices = await this.adapter.GetDevicesAsync();
+            foreach (var device in devices) 
+                await this.ProcessDeviceAsync(device, cancellationToken);
+        }
 
+        private async Task ProcessDeviceAsync(IDevice1 device, CancellationToken cancellationToken)
+        {
             await btLock.WaitAsync(cancellationToken);
 
             try
             {
-                // Wait for name property at most N seconds
-                var deviceNameTask = await device
-                    .GetAsync<string>("Name")
-                    .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-
-                // Ignore if not flower care or did not respond in time
-                if (string.IsNullOrWhiteSpace(deviceNameTask) ||
-                    !deviceNameTask.Contains("Flower care"))
+                // Skip if in ignored devices list
+                if (this.ignoredDevices.Contains(device.ObjectPath.ToString()))
                 {
-                    this.logger.LogDebug("Task result: {@Task}", deviceNameTask);
+                    this.logger.LogTrace("BLE Device {DevicePath} ignored", device.ObjectPath);
+                    return;
+                }
+
+                // See if this is device we are interested info and add it to known devices list
+                if (!this.knownDevices.Contains(device.ObjectPath.ToString()))
+                {
+                    // Wait for name property at most N seconds
+                    this.logger.LogDebug("BLE Device: {DevicePath} discovery...", device.ObjectPath);
+                    var deviceNameTask = await device
+                        .GetAsync<string>("Name")
+                        .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+
+                    // Ignore if not flower care or did not respond in time
+                    if (string.IsNullOrWhiteSpace(deviceNameTask) ||
+                        !deviceNameTask.Contains("Flower care"))
+                    {
+                        this.ignoredDevices.Add(device.ObjectPath.ToString());
+                        this.logger.LogTrace("BLE Device {DevicePath} added to ignored devices because it didn't match", device.ObjectPath);
+                        return;
+                    }
+
+                    this.knownDevices.Add(device.ObjectPath.ToString());
+                    this.logger.LogTrace("BLE Device {DevicePath} added to known devices", device.ObjectPath);
+                }
+
+                // Skip if device is not in known devices list
+                if (!this.knownDevices.Contains(device.ObjectPath.ToString()))
+                {
+                    this.logger.LogTrace("BLE Device {DevicePath} ignored", device.ObjectPath);
                     return;
                 }
 
@@ -124,24 +150,35 @@ namespace Signalco.Station.Channel.MiFlora
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
                     await Task.Delay(500, cancellationToken);
 
-                    // Read sensor data
+                    // Get sensor data characteristic
                     var sensorData = await floraService
                         .GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
                     
+                    // Read sensor data
                     var sensorDataValue = await sensorData.ReadValueAsync(TimeSpan.FromSeconds(10));
-                    this.logger.LogDebug("Flora sensor data: {@Data}", sensorDataValue);
+                    this.logger.LogTrace("Flora sensor data: {@Data}", sensorDataValue);
 
-                    // TODO: Parse sensor data
-                    //int16_t* temp_raw = (int16_t*)val;
-                    //float temperature = (*temp_raw) / ((float)10.0);
-                    //Serial.printf("-- Temperature: %f\n", temperature);
+                    // Parse sensor data
+                    var temperature = (short)(sensorDataValue[0] << 8 | sensorDataValue[1]);
+                    var moisture = (int)sensorDataValue[7];
+                    var light = sensorDataValue[3] + sensorDataValue[4] * 256;
+                    var conductivity = sensorDataValue[8] + sensorDataValue[9] * 256;
 
-                    int moisture = sensorDataValue[7];
-                    int light = sensorDataValue[3] + sensorDataValue[4] * 256;
-                    int conductivity = sensorDataValue[8] + sensorDataValue[9] * 256;
-                    
                     this.logger.LogDebug("Moisture: {MoistureValue}, Light: {LightValue}, Conductivity: {ConductivityValue}", moisture, light, conductivity);
+
+                    // Validate values
+                    if (temperature is < -30 or > 80 ||
+                        moisture is < 0 or > 100 ||
+                        light < 0 ||
+                        conductivity is < 0 or > 20000)
+                    {
+                        // TODO: Invalidate read
+                        this.logger.LogDebug(
+                            "Ignored values of device {DevicePath} because they are out of range",
+                            device.ObjectPath);
+                        return;
+                    }
 
                     //var versionBattery =
                     //    await floraService.GetCharacteristicAsync("00001a02-0000-1000-8000-00805f9b34fb");
@@ -177,42 +214,7 @@ namespace Signalco.Station.Channel.MiFlora
                 btLock.Release();
             }
         }
-
-        private async Task DeviceOnDisconnected(Device sender, BlueZEventArgs eventargs)
-        {
-            this.logger.LogDebug("BLE Device disconnected: {DevicePath}", sender.ObjectPath);
-        }
-
-        private async Task DeviceOnConnected(Device sender, BlueZEventArgs eventargs)
-        {
-            this.logger.LogDebug("BLE Device connected: {DevicePath}", sender.ObjectPath);
-        }
-
-        private async Task DeviceOnServicesResolved(Device sender, BlueZEventArgs args)
-        {
-            // await btLock.WaitAsync();
-            //
-            // try
-            // {
-            //     this.logger.LogDebug("BLE service resolver {State}", args.IsStateChange);
-            //     var services = await sender.GetServicesAsync();
-            //     this.logger.LogDebug("BLE Services: {@Services}", services);
-            //     foreach (var service in services)
-            //     {
-            //         this.logger.LogDebug("Device: {DevicePath} Service: {Service} UUID: {Uuid}",
-            //             sender.ObjectPath,
-            //             service.ObjectPath,
-            //             await service.GetUUIDAsync());
-            //     }
-            // }
-            // catch (Exception ex)
-            // {
-            //     this.logger.LogWarning(ex, "Failed to read services for device {DevicePath}", sender.ObjectPath);
-            // }
-            //
-            // btLock.Release();
-        }
-
+        
         public Task StopAsync(CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
