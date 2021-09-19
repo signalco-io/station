@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using HashtagChris.DotNetBlueZ;
 using HashtagChris.DotNetBlueZ.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Devices;
@@ -13,20 +12,6 @@ using Signal.Beacon.Core.Workers;
 
 namespace Signalco.Station.Channel.MiFlora
 {
-    public static class MiFloraWorkerServiceCollectionExtensions
-    {
-        public static IServiceCollection AddMiFlora(this IServiceCollection services)
-        {
-            return services
-                .AddTransient<IWorkerService, MiFloraWorkerService>();
-        }
-    }
-
-    internal class MiFloraChannels
-    {
-        public const string MiFlora = "miflora";
-    }
-
     internal class MiFloraWorkerService : IWorkerService
     {
         private readonly IDevicesDao devicesDao;
@@ -35,7 +20,6 @@ namespace Signalco.Station.Channel.MiFlora
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
         private readonly ILogger<MiFloraWorkerService> logger;
         private static readonly SemaphoreSlim btLock = new(1, 1);
-        private CancellationToken startCancellationToken;
         private Adapter? adapter;
         private readonly List<string> knownDevices = new();
         private readonly List<string> ignoredDevices = new();
@@ -48,26 +32,31 @@ namespace Signalco.Station.Channel.MiFlora
             ILogger<MiFloraWorkerService> logger)
         {
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
-            this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
-            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
+            this.deviceDiscoveryHandler = deviceDiscoveryHandler ??
+                                          throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
+            this.deviceContactUpdateHandler = deviceContactUpdateHandler ??
+                                              throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
             this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public Task StartAsync(CancellationToken cancellationToken)
         {
-            this.startCancellationToken = cancellationToken;
             _ = Task.Run(() => this.PoolDevicesLoop(cancellationToken), cancellationToken);
+
+            return Task.CompletedTask;
         }
 
         private async Task BeginDiscoveryAsync(CancellationToken cancellationToken)
         {
             this.logger.LogDebug("Started discovery...");
-            
+
             try
             {
-                this.adapter = (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken)).FirstOrDefault();
+                this.adapter =
+                    (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken))
+                    .FirstOrDefault();
                 if (this.adapter == null)
                     throw new Exception("No BT adapter available.");
                 this.logger.LogDebug("Using adapter: {AdapterName}", this.adapter.ObjectPath);
@@ -99,7 +88,7 @@ namespace Signalco.Station.Channel.MiFlora
 
             // Process known devices
             var devices = await this.adapter.GetDevicesAsync();
-            foreach (var device in devices) 
+            foreach (var device in devices)
                 await this.ProcessDeviceAsync(device, cancellationToken);
         }
 
@@ -148,7 +137,9 @@ namespace Signalco.Station.Channel.MiFlora
                     var device = await this.devicesDao.GetAsync(identifier, cancellationToken);
                     if (device == null)
                     {
-                        this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", identifier);
+                        this.logger.LogWarning(
+                            "Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.",
+                            identifier);
                     }
                     else
                     {
@@ -185,11 +176,11 @@ namespace Signalco.Station.Channel.MiFlora
 
                 // Retrieve device from DAO
                 var deviceIdentifier = $"{MiFloraChannels.MiFlora}/{await btDevice.GetAddressAsync()}";
-                
+
                 try
                 {
                     // Try to connect
-                    await btDevice.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    await btDevice.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -215,7 +206,7 @@ namespace Signalco.Station.Channel.MiFlora
                     var sensorData = await floraService
                         .GetCharacteristicAsync("00001a01-0000-1000-8000-00805f9b34fb")
                         .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-                    
+
                     // Read sensor data
                     var sensorDataValue = await sensorData.ReadValueAsync(TimeSpan.FromSeconds(10));
                     this.logger.LogTrace("Flora sensor data: {@Data}", sensorDataValue);
@@ -226,7 +217,9 @@ namespace Signalco.Station.Channel.MiFlora
                     var light = sensorDataValue[3] + sensorDataValue[4] * 256;
                     var conductivity = sensorDataValue[8] + sensorDataValue[9] * 256;
 
-                    this.logger.LogDebug("Moisture: {MoistureValue}, Light: {LightValue}, Conductivity: {ConductivityValue}, Temperature: {TemperatureValue}", moisture, light, conductivity, temperature);
+                    this.logger.LogDebug(
+                        "Moisture: {MoistureValue}, Light: {LightValue}, Conductivity: {ConductivityValue}, Temperature: {TemperatureValue}",
+                        moisture, light, conductivity, temperature);
 
                     // Validate values
                     if (temperature is < -30 or > 80 ||
@@ -289,7 +282,7 @@ namespace Signalco.Station.Channel.MiFlora
             catch (Exception ex)
             {
                 this.logger.LogDebug(
-                    ex, 
+                    ex,
                     "Failed to process device {DevicePath}",
                     btDevice.ObjectPath);
             }
@@ -298,9 +291,11 @@ namespace Signalco.Station.Channel.MiFlora
                 btLock.Release();
             }
         }
-        
+
         public Task StopAsync(CancellationToken cancellationToken)
         {
+            this.adapter?.Dispose();
+
             return Task.CompletedTask;
         }
     }

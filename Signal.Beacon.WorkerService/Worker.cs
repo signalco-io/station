@@ -134,7 +134,9 @@ namespace Signal.Beacon
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogError(ex, "Service {WorkerServiceName} stopping timed out.",
+                    this.logger.LogError(
+                        ex, 
+                        "Service {WorkerServiceName} stopping failed.",
                         workerService.GetType().Name);
                 }
             });
