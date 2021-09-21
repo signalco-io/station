@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Signal.Beacon.Application.Conducts;
 using Signal.Beacon.Application.Lifetime;
 using Signal.Beacon.Application.Processing;
@@ -22,6 +23,7 @@ namespace Signal.Beacon.Application
         private readonly IUpdateService updateService;
         private readonly IConfigurationService configurationService;
         private readonly IConductManager conductManager;
+        private readonly ILogger<ApplicationWorkerService> logger;
 
         public ApplicationWorkerService(
             IProcessor processor,
@@ -30,7 +32,8 @@ namespace Signal.Beacon.Application
             IConductSubscriberClient conductSubscriberClient,
             IUpdateService updateService,
             IConfigurationService configurationService,
-            IConductManager conductManager)
+            IConductManager conductManager,
+            ILogger<ApplicationWorkerService> logger)
         {
             this.processor = processor ?? throw new ArgumentNullException(nameof(processor));
             this.devicesHubClient = devicesHubClient ?? throw new ArgumentNullException(nameof(devicesHubClient));
@@ -39,6 +42,7 @@ namespace Signal.Beacon.Application
             this.updateService = updateService ?? throw new ArgumentNullException(nameof(updateService));
             this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
             this.conductManager = conductManager ?? throw new ArgumentNullException(nameof(conductManager));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
         
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -53,6 +57,8 @@ namespace Signal.Beacon.Application
 
         private async Task StationConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
+            this.logger.LogDebug("Processing station conducts...");
+            
             var config = await this.configurationService.LoadAsync<BeaconConfiguration>("beacon.json", cancellationToken);
             if (string.IsNullOrWhiteSpace(config.Identifier))
                 throw new Exception("Can't generate state report without identifier.");
@@ -61,7 +67,10 @@ namespace Signal.Beacon.Application
             {
                 // Skip if not for this station
                 if (conduct.Target.Identifier != config.Identifier)
+                {
+                    this.logger.LogDebug("Ignored conduct because target is not this station. Conduct: {@Conduct}", conduct);
                     continue;
+                }
 
                 switch (conduct.Target.Contact)
                 {
