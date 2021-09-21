@@ -19,7 +19,13 @@ namespace Signal.Beacon.Application.Lifetime
         
         public async Task BeginUpdateAsync(CancellationToken cancellationToken)
         {
-            const string? filePathExecute = "./rpi-update.sh";
+            const string filePathExecute = "./rpi-update.sh";
+
+            this.logger.LogDebug("Setting permission for update script...");
+            const string? cmd = $"chmod +x {filePathExecute}";
+            using (Process proc = Process.Start("/bin/bash", $"-c \"{cmd}\""))
+                await proc.WaitForExitAsync(cancellationToken);
+
             FileInfo fileInfo = new FileInfo(filePathExecute);
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
