@@ -65,7 +65,7 @@ namespace Signal.Beacon.Application
 
                 switch (conduct.Target.Contact)
                 {
-                    case "update": 
+                    case "update":
                         await this.updateService.BeginUpdateAsync(cancellationToken);
                         break;
                     default:
