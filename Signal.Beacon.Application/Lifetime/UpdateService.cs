@@ -31,7 +31,7 @@ namespace Signal.Beacon.Application.Lifetime
             {
                 UseShellExecute = false,
                 FileName = "/bin/bash",
-                Arguments = $"\"{fileInfo.FullName}\""
+                Arguments = $"-c \"sudo {fileInfo.FullName}\""
             };
             
             this.logger.LogInformation("Starting station update...");
