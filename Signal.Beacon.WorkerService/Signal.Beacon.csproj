@@ -27,4 +27,11 @@
     <ProjectReference Include="..\Signal.Beacon.Channel.Zigbee2Mqtt\Signal.Beacon.Channel.Zigbee2Mqtt.csproj" />
     <ProjectReference Include="..\Signalco.Station.Channel.MiFlora\Signalco.Station.Channel.MiFlora.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="rpi-update.sh" />
+    <Content Include="rpi-update.sh">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
