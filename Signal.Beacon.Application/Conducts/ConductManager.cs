@@ -49,17 +49,12 @@ namespace Signal.Beacon.Application.Conducts
         private async Task ConductRequestedHandlerAsync(ConductRequestDto request, CancellationToken cancellationToken)
         {
             var device = await this.devicesDao.GetByIdAsync(request.DeviceId, cancellationToken);
-            if (device == null)
-            {
-                this.logger.LogTrace("Conduct ignored. Device {DeviceId} unknown.", request.DeviceId);
-                return;
-            }
 
             // Publish right away if no delay or ignored
             await this.PublishAsync(new[]
             {
                 new Conduct(
-                    new DeviceTarget(request.ChannelName, device.Identifier, request.ContactName),
+                    new DeviceTarget(request.ChannelName, device?.Identifier ?? request.DeviceId, request.ContactName),
                     request.ValueSerialized,
                     request.Delay ?? 0)
             }, cancellationToken);
