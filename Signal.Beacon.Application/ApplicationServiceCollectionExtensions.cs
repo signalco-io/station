@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Signal.Beacon.Application.Conducts;
+using Signal.Beacon.Application.Lifetime;
 using Signal.Beacon.Application.Mqtt;
 using Signal.Beacon.Application.Network;
 using Signal.Beacon.Application.Processing;
@@ -33,6 +34,9 @@ namespace Signal.Beacon.Application
             services.AddSingleton<IProcessesDao, ProcessesDao>();
             services.AddSingleton<IDeviceStateManager, DeviceStateManager>();
 
+            // Lifetime
+            services.AddTransient<IUpdateService, UpdateService>();
+            
             // MQTT
             services.AddTransient<IMqttClient, MqttClient>();
             services.AddTransient<IMqttClientFactory, MqttClientFactory>();
