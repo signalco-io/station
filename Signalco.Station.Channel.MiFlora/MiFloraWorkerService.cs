@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Workers;
+using Tmds.DBus;
 
 namespace Signalco.Station.Channel.MiFlora
 {
@@ -109,10 +110,18 @@ namespace Signalco.Station.Channel.MiFlora
                 if (!this.knownDevices.Contains(btDevice.ObjectPath.ToString()))
                 {
                     // Wait for name property at most N seconds
-                    this.logger.LogDebug("BLE Device: {DevicePath} discovery...", btDevice.ObjectPath);
-                    var deviceName = await btDevice
-                        .GetAsync<string>("Name")
-                        .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    string? deviceName = null;
+                    try
+                    {
+                        this.logger.LogDebug("BLE Device: {DevicePath} discovery...", btDevice.ObjectPath);
+                        deviceName = await btDevice
+                            .GetAsync<string>("Name")
+                            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    }
+                    catch (DBusException ex) when (ex.Message.Contains("No such property 'Name'"))
+                    {
+                        // Ignore, name not retrieved
+                    }
 
                     // Ignore if not flower care or did not respond in time
                     if (string.IsNullOrWhiteSpace(deviceName) ||

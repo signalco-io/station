@@ -58,7 +58,7 @@ namespace Signal.Beacon.Application.Lifetime
                     }
                 }, cancellationToken);
                 
-                await process.WaitForExitAsync(cancellationToken);
+                //await process.WaitForExitAsync(cancellationToken);
             }
             catch (Exception ex)
             {
