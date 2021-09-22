@@ -17,8 +17,8 @@ sudo chown -R ubuntu:ubuntu /opt/signalcostation
 cd /opt/signalcostation || exit
 
 ## Stop station
-echo "Stopping station..."
-sudo systemctl stop signalcostation.service
+#echo "Stopping station..."
+#sudo systemctl stop signalcostation.service
 
 ## Configure service
 echo "Creating service file signalcostation.service and enabling..."
@@ -36,4 +36,4 @@ User=ubuntu
 [Install]
 WantedBy=multi-user.target" > $service_path
 sudo systemctl enable signalcostation.service
-sudo systemctl start signalcostation.service
+sudo systemctl restart signalcostation.service
