@@ -129,8 +129,8 @@ namespace Signalco.Station.Channel.MiFlora
                     {
                         this.ignoredDevices.Add(btDevice.ObjectPath.ToString());
                         this.logger.LogDebug(
-                            "BLE Device {DevicePath} added to ignored devices because it didn't match",
-                            btDevice.ObjectPath);
+                            "BLE Device {DevicePath} added to ignored devices because it didn't match: {DeviceName}",
+                            btDevice.ObjectPath, deviceName);
                         return;
                     }
 
