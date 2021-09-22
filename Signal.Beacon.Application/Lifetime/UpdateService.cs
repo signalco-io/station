@@ -26,10 +26,9 @@ namespace Signal.Beacon.Application.Lifetime
             using (Process proc = Process.Start("/bin/bash", $"-c \"{cmd}\""))
                 await proc.WaitForExitAsync(cancellationToken);
 
-            FileInfo fileInfo = new FileInfo(filePathExecute);
-            ProcessStartInfo startInfo = new ProcessStartInfo
+            var fileInfo = new FileInfo(filePathExecute);
+            var startInfo = new ProcessStartInfo
             {
-                UseShellExecute = false,
                 FileName = "/bin/bash",
                 Arguments = $"-c \"sudo {fileInfo.FullName}\""
             };

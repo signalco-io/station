@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -93,7 +95,7 @@ namespace Signal.Beacon.Application
                 this.cacheTimeStamp.HasValue &&
                 DateTime.UtcNow - this.cacheTimeStamp.Value <= CacheValidPeriod)
                 return;
-            
+
             try
             {
                 this.logger.LogDebug("Loading processes...");
@@ -126,6 +128,14 @@ namespace Signal.Beacon.Application
                         this.getProcessesTask = null;
                     }
                 }
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+            {
+                // Throw if we don't have local cache
+                if (this.processes == null) 
+                    throw;
+
+                this.logger.LogWarning("Can't revalidate processes cache because cloud is unavailable");
             }
             catch (Exception ex)
             {
