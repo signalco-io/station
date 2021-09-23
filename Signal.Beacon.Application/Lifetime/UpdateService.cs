@@ -37,7 +37,7 @@ namespace Signal.Beacon.Application.Lifetime
         public async Task UpdateSystemAsync(CancellationToken cancellationToken)
         {
             this.logger.LogInformation("Requested system update. Executing...");
-            await this.ExecuteShellCommandAsync("for i in update {,dist-}upgrade auto{remove,clean}; do apt-get $i -y; done", cancellationToken);
+            await this.ExecuteShellCommandAsync("for i in update {,dist-}upgrade auto{remove,clean}; do sudo apt-get $i -y; done", cancellationToken);
         }
 
         public async Task BeginUpdateAsync(CancellationToken cancellationToken)
