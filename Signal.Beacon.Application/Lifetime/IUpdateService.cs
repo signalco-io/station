@@ -5,7 +5,7 @@ namespace Signal.Beacon.Application.Lifetime
 {
     public interface IUpdateService
     {
-        Task ShutdownAsync();
+        Task ShutdownSystemAsync();
 
         Task RestartStationAsync();
 

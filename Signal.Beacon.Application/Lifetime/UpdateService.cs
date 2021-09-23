@@ -19,7 +19,7 @@ namespace Signal.Beacon.Application.Lifetime
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task ShutdownAsync()
+        public async Task ShutdownSystemAsync()
         {
             this.logger.LogInformation("Requested system shutdown. Executing...");
             await this.ExecuteShellCommandAsync("sudo shutdown -P now", CancellationToken.None);
