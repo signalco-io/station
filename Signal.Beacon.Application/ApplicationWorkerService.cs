@@ -77,6 +77,15 @@ namespace Signal.Beacon.Application
                     case "update":
                         await this.updateService.BeginUpdateAsync(cancellationToken);
                         break;
+                    case "restartStation":
+                        await this.updateService.RestartStationAsync();
+                        break;
+                    case "updateSystem":
+                        await this.updateService.UpdateSystemAsync(cancellationToken);
+                        break;
+                    case "shutdownSystem":
+                        await this.updateService.ShutdownSystemAsync();
+                        break;
                     default:
                         throw new NotSupportedException("Not supported station conduct.");
                 }
