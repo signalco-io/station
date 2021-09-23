@@ -91,7 +91,7 @@ namespace Signal.Beacon.Application
         private void ExtendCacheValidity(TimeSpan? duration = null)
         {
             this.cacheExpiry = DateTime.UtcNow + (duration ?? CacheValidPeriod);
-            this.logger.LogDebug("Processes cache valid until {TimeStamp}", this.cacheExpiry.Value + CacheValidPeriod);
+            this.logger.LogDebug("Processes cache valid until {TimeStamp}", this.cacheExpiry.Value);
         }
 
         private async Task CacheProcessesAsync(CancellationToken cancellationToken)
