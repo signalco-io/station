@@ -34,6 +34,12 @@ namespace Signal.Beacon.Application.Lifetime
             return Task.CompletedTask;
         }
 
+        public async Task RestartSystemAsync()
+        {
+            this.logger.LogInformation("Requested system restart. Executing...");
+            await this.ExecuteShellCommandAsync("sudo shutdown -r now", CancellationToken.None);
+        }
+
         public async Task UpdateSystemAsync(CancellationToken cancellationToken)
         {
             this.logger.LogInformation("Requested system update. Executing...");

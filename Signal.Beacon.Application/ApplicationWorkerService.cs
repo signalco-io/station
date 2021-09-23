@@ -83,6 +83,9 @@ namespace Signal.Beacon.Application
                     case "updateSystem":
                         await this.updateService.UpdateSystemAsync(cancellationToken);
                         break;
+                    case "restartSystem":
+                        await this.updateService.RestartSystemAsync();
+                        break;
                     case "shutdownSystem":
                         await this.updateService.ShutdownSystemAsync();
                         break;

@@ -9,6 +9,8 @@ namespace Signal.Beacon.Application.Lifetime
 
         Task RestartStationAsync();
 
+        Task RestartSystemAsync();
+
         Task UpdateSystemAsync(CancellationToken cancellationToken);
 
         Task BeginUpdateAsync(CancellationToken cancellationToken);
