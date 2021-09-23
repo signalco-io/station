@@ -23,7 +23,7 @@ namespace Signal.Beacon.Application
         
         // Caching
         private readonly object cacheLock = new();
-        private DateTime? cacheTimeStamp;
+        private DateTime? cacheExpiry;
         private static readonly TimeSpan CacheValidPeriod = TimeSpan.FromMinutes(1);
 
         private readonly JsonSerializerSettings deserializationSettings;
@@ -88,12 +88,18 @@ namespace Signal.Beacon.Application
             }).ToList();
         }
 
+        private void ExtendCacheValidity(TimeSpan? duration = null)
+        {
+            this.cacheExpiry = DateTime.UtcNow + (duration ?? CacheValidPeriod);
+            this.logger.LogDebug("Processes cache valid until {TimeStamp}", this.cacheExpiry.Value + CacheValidPeriod);
+        }
+
         private async Task CacheProcessesAsync(CancellationToken cancellationToken)
         {
             // Don't cache again if we have cache, and cache valid period didn't expire
             if (this.processes != null &&
-                this.cacheTimeStamp.HasValue &&
-                DateTime.UtcNow - this.cacheTimeStamp.Value <= CacheValidPeriod)
+                this.cacheExpiry.HasValue &&
+                DateTime.UtcNow - this.cacheExpiry.Value <= TimeSpan.Zero)
                 return;
 
             try
@@ -107,8 +113,8 @@ namespace Signal.Beacon.Application
                 lock (this.cacheLock)
                 {
                     if (this.processes != null &&
-                        this.cacheTimeStamp.HasValue &&
-                        DateTime.UtcNow - this.cacheTimeStamp.Value <= CacheValidPeriod)
+                        this.cacheExpiry.HasValue &&
+                        DateTime.UtcNow - this.cacheExpiry.Value <= TimeSpan.Zero)
                         return;
 
                     try
@@ -119,7 +125,7 @@ namespace Signal.Beacon.Application
 
                         // Invalidate dependency caches
                         this.stateTriggerProcesses = null;
-                        this.cacheTimeStamp = DateTime.UtcNow;
+                        this.ExtendCacheValidity();
 
                         this.logger.LogDebug("Loaded {ProcessesCount} processes.", this.processes.Count);
                     }
@@ -132,10 +138,20 @@ namespace Signal.Beacon.Application
             catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.ServiceUnavailable)
             {
                 // Throw if we don't have local cache
-                if (this.processes == null) 
+                if (this.processes == null)
                     throw;
 
                 this.logger.LogWarning("Can't revalidate processes cache because cloud is unavailable");
+                this.ExtendCacheValidity();
+            }
+            catch (TaskCanceledException)
+            {
+                // Throw if we don't have local cache
+                if (this.processes == null)
+                    throw;
+
+                this.logger.LogWarning("Can't revalidate processes cache - timeout");
+                this.ExtendCacheValidity();
             }
             catch (Exception ex)
             {
