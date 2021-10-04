@@ -24,7 +24,7 @@ namespace Signal.Beacon.Application
         // Caching
         private readonly object cacheLock = new();
         private DateTime? cacheExpiry;
-        private static readonly TimeSpan CacheValidPeriod = TimeSpan.FromMinutes(1);
+        private static readonly TimeSpan CacheValidPeriod = TimeSpan.FromMinutes(60);
 
         private readonly JsonSerializerSettings deserializationSettings;
         private List<Process>? processes;
