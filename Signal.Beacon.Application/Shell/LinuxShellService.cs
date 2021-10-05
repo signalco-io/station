@@ -7,12 +7,12 @@ using Signal.Beacon.Core.Shell;
 
 namespace Signal.Beacon.Application.Shell
 {
-    internal class ShellService : IShellService
+    internal class LinuxShellService : IShellService
     {
-        private readonly ILogger<ShellService> logger;
+        private readonly ILogger<LinuxShellService> logger;
 
-        public ShellService(
-            ILogger<ShellService> logger)
+        public LinuxShellService(
+            ILogger<LinuxShellService> logger)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }

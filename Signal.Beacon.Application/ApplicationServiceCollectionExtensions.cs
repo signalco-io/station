@@ -5,6 +5,7 @@ using Signal.Beacon.Application.Mqtt;
 using Signal.Beacon.Application.Network;
 using Signal.Beacon.Application.Processing;
 using Signal.Beacon.Application.PubSub;
+using Signal.Beacon.Application.Shell;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conditions;
 using Signal.Beacon.Core.Conducts;
@@ -12,6 +13,7 @@ using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Processes;
+using Signal.Beacon.Core.Shell;
 using Signal.Beacon.Core.Workers;
 
 namespace Signal.Beacon.Application
@@ -33,9 +35,9 @@ namespace Signal.Beacon.Application
             services.AddSingleton<IDevicesDao, DevicesDao>();
             services.AddSingleton<IProcessesDao, ProcessesDao>();
             services.AddSingleton<IDeviceStateManager, DeviceStateManager>();
-
-            // Lifetime
-            services.AddTransient<IUpdateService, UpdateService>();
+                
+            services.AddTransient<IShellService, LinuxShellService>();
+            services.AddTransient<IUpdateService, LinuxUpdateService>();
             
             // MQTT
             services.AddTransient<IMqttClient, MqttClient>();
