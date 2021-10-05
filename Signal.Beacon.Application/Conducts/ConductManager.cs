@@ -40,26 +40,33 @@ namespace Signal.Beacon.Application.Conducts
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             await this.signalRConductsHubClient.OnConductRequestAsync(
-                this.ConductRequestedHandlerAsync,
+                (req, token) => this.ConductRequestedMultipleHandlerAsync(new []{req}, token),
+                cancellationToken);
+
+            await this.signalRConductsHubClient.OnConductRequestMultipleAsync(
+                this.ConductRequestedMultipleHandlerAsync,
                 cancellationToken);
 
             _ = Task.Run(() => this.DelayedConductsLoop(cancellationToken), cancellationToken);
         }
 
-        private async Task ConductRequestedHandlerAsync(ConductRequestDto request, CancellationToken cancellationToken)
+        private async Task ConductRequestedMultipleHandlerAsync(IEnumerable<ConductRequestDto> requests, CancellationToken cancellationToken)
         {
-            var device = await this.devicesDao.GetByIdAsync(request.DeviceId, cancellationToken);
-
-            // Publish right away if no delay or ignored
-            await this.PublishAsync(new[]
+            var conducts = new List<Conduct>();
+            foreach (var request in requests)
             {
-                new Conduct(
-                    new DeviceTarget(request.ChannelName, device?.Identifier ?? request.DeviceId, request.ContactName),
-                    request.ValueSerialized,
-                    request.Delay ?? 0)
-            }, cancellationToken);
-        }
+                var device = await this.devicesDao.GetByIdAsync(request.DeviceId, cancellationToken);
+                conducts.Add(new Conduct(
+                        new DeviceTarget(request.ChannelName, device?.Identifier ?? request.DeviceId,
+                            request.ContactName),
+                        request.ValueSerialized,
+                        request.Delay ?? 0)
+                );
+            }
 
+            await this.PublishAsync(conducts, cancellationToken);
+        }
+        
         private async Task DelayedConductsLoop(CancellationToken cancellationToken)
         {
             await foreach (var conduct in this.delayedConducts.WithCancellation(cancellationToken))
