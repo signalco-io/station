@@ -135,7 +135,23 @@ namespace Signalco.Station.Channel.MiFlora
             {
                 await this.BeginDiscoveryAsync(cancellationToken);
                 await this.ProcessDevicesAsync(cancellationToken);
+                await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+                await this.EndDiscoveryAsync();
                 await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken);
+            }
+        }
+
+        private async Task EndDiscoveryAsync()
+        {
+            try
+            {
+                if(this.adapter != null)
+                    await this.adapter.StopDiscoveryAsync();
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogTrace(ex, "Failed to stop discovery");
+                this.logger.LogDebug("Failed to stop discovery");
             }
         }
 
