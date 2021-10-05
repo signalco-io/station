@@ -8,6 +8,7 @@ using HashtagChris.DotNetBlueZ.Extensions;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Shell;
 using Signal.Beacon.Core.Workers;
 using Tmds.DBus;
 
@@ -19,17 +20,20 @@ namespace Signalco.Station.Channel.MiFlora
         private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
         private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
         private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
+        private readonly IShellService shell;
         private readonly ILogger<MiFloraWorkerService> logger;
         private static readonly SemaphoreSlim btLock = new(1, 1);
         private Adapter? adapter;
         private readonly List<string> knownDevices = new();
         private readonly List<string> ignoredDevices = new();
+        private bool didApplyFirmwareFix;
 
         public MiFloraWorkerService(
             IDevicesDao devicesDao,
             ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
             ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
             ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
+            IShellService shell,
             ILogger<MiFloraWorkerService> logger)
         {
             this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
@@ -38,6 +42,7 @@ namespace Signalco.Station.Channel.MiFlora
             this.deviceContactUpdateHandler = deviceContactUpdateHandler ??
                                               throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
             this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
+            this.shell = shell ?? throw new ArgumentNullException(nameof(shell));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -49,20 +54,73 @@ namespace Signalco.Station.Channel.MiFlora
             return Task.CompletedTask;
         }
 
-        private async Task BeginDiscoveryAsync(CancellationToken cancellationToken)
+        private async Task ApplyAdapterFirmwareFixAsync(CancellationToken cancellationToken)
         {
-            this.logger.LogDebug("Started discovery...");
+            try
+            {
+                this.logger.LogInformation("Fixing firmware directory...");
+                await this.shell.ExecuteShellCommandAsync("sudo ln -s /lib/firmware /etc/firmware", cancellationToken);
+
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(ex, "Failed to initialize BT adapter - firmware directory fix failed");
+            }
 
             try
             {
-                this.adapter =
-                    (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken))
+                this.logger.LogInformation("Attaching BCM device...");
+                await this.shell.ExecuteShellCommandAsync("sudo hciattach /dev/ttyAMA0 bcm43xx 921600 noflow -",
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(ex, "Failed to initialize BT adapter - attaching BCM adapter failed");
+            }
+        }
+
+        private async Task AssignAdapterBtAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                this.logger.LogDebug("Retrieving BT adapter...");
+                var newAdapter = (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken))
                     .FirstOrDefault();
+                if (newAdapter == null)
+                {
+                    if (!this.didApplyFirmwareFix)
+                    {
+                        this.didApplyFirmwareFix = true;
+                        await this.ApplyAdapterFirmwareFixAsync(cancellationToken);
+                        await this.AssignAdapterBtAsync(cancellationToken);
+                    }
+
+                    if (newAdapter == null)
+                        throw new Exception("No BT adapter available.");
+
+                    this.logger.LogDebug("Using BT adapter: {AdapterName}", newAdapter.ObjectPath);
+                }
+
+                this.adapter = newAdapter;
+            }
+            catch (Exception ex)
+            {
+                this.adapter = null;
+                this.logger.LogTrace(ex, "Failed to assign BT adapter.");
+                this.logger.LogWarning("Failed to assign BT adapter.");
+            }
+        }
+        
+        private async Task BeginDiscoveryAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await this.AssignAdapterBtAsync(cancellationToken);
                 if (this.adapter == null)
-                    throw new Exception("No BT adapter available.");
-                this.logger.LogDebug("Using adapter: {AdapterName}", this.adapter.ObjectPath);
+                    throw new Exception("No BT adapter");
 
                 // Start device discovery
+                this.logger.LogDebug("Started discovery...");
                 await this.adapter.StartDiscoveryAsync().WaitAsync(TimeSpan.FromMinutes(1), cancellationToken);
             }
             catch (Exception ex)
@@ -73,10 +131,9 @@ namespace Signalco.Station.Channel.MiFlora
 
         private async Task PoolDevicesLoop(CancellationToken cancellationToken)
         {
-            await this.BeginDiscoveryAsync(cancellationToken);
-
             while (!cancellationToken.IsCancellationRequested)
             {
+                await this.BeginDiscoveryAsync(cancellationToken);
                 await this.ProcessDevicesAsync(cancellationToken);
                 await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken);
             }

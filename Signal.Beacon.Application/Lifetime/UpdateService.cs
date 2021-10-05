@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Signal.Beacon.Core.Shell;
 
 namespace Signal.Beacon.Application.Lifetime
 {
@@ -11,18 +12,21 @@ namespace Signal.Beacon.Application.Lifetime
     {
         private const string FilePathExecute = "./rpi-update.sh";
 
+        private readonly IShellService shell;
         private readonly ILogger<UpdateService> logger;
 
         public UpdateService(
+            IShellService shell,
             ILogger<UpdateService> logger)
         {
+            this.shell = shell ?? throw new ArgumentNullException(nameof(shell));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task ShutdownSystemAsync()
         {
             this.logger.LogInformation("Requested system shutdown. Executing...");
-            await this.ExecuteShellCommandAsync("sudo shutdown -P now", CancellationToken.None);
+            await this.shell.ExecuteShellCommandAsync("sudo shutdown -P now", CancellationToken.None);
         }
 
         public Task RestartStationAsync()
@@ -37,58 +41,23 @@ namespace Signal.Beacon.Application.Lifetime
         public async Task RestartSystemAsync()
         {
             this.logger.LogInformation("Requested system restart. Executing...");
-            await this.ExecuteShellCommandAsync("sudo shutdown -r now", CancellationToken.None);
+            await this.shell.ExecuteShellCommandAsync("sudo shutdown -r now", CancellationToken.None);
         }
 
         public async Task UpdateSystemAsync(CancellationToken cancellationToken)
         {
             this.logger.LogInformation("Requested system update. Executing...");
-            await this.ExecuteShellCommandAsync("for i in update {,dist-}upgrade auto{remove,clean}; do sudo apt-get $i -y; done", cancellationToken);
+            await this.shell.ExecuteShellCommandAsync("for i in update {,dist-}upgrade auto{remove,clean}; do sudo apt-get $i -y; done", cancellationToken);
         }
 
         public async Task BeginUpdateAsync(CancellationToken cancellationToken)
         {
             this.logger.LogDebug("Setting permission for update script...");
-            await this.ExecuteShellCommandAsync($"chmod +x {FilePathExecute}", cancellationToken);
+            await this.shell.ExecuteShellCommandAsync($"chmod +x {FilePathExecute}", cancellationToken);
 
             this.logger.LogInformation("Starting station update...");
             var fileInfo = new FileInfo(FilePathExecute);
-            await this.ExecuteShellCommandAsync($"sudo {fileInfo.FullName}", cancellationToken);
-        }
-
-        private async Task ExecuteShellCommandAsync(string command, CancellationToken cancellationToken)
-        {
-            using var process = new Process();
-            var processRef = new WeakReference<Process>(process);
-            process.StartInfo = new ProcessStartInfo
-            {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"{command}\""
-            };
-
-            _ = Task.Run(() =>
-            {
-                while (processRef.TryGetTarget(out var proc) && !proc.HasExited &&
-                       !cancellationToken.IsCancellationRequested)
-                {
-                    var errorLine = proc.StandardError.ReadLine();
-                    this.logger.LogDebug("Update ERROR > {Line}", errorLine);
-                }
-            }, cancellationToken);
-
-            _ = Task.Run(() =>
-            {
-                while (processRef.TryGetTarget(out var proc) && !proc.HasExited &&
-                       !cancellationToken.IsCancellationRequested)
-                {
-                    var outputLine = proc.StandardOutput.ReadLine();
-                    this.logger.LogDebug("Update INFO > {Line}", outputLine);
-                }
-            }, cancellationToken);
-
-            process.Start();
-
-            await process.WaitForExitAsync(cancellationToken);
+            await this.shell.ExecuteShellCommandAsync($"sudo {fileInfo.FullName}", cancellationToken);
         }
     }
 }
