@@ -97,81 +97,89 @@ namespace Signal.Beacon.Channel.PhilipsHue
 
         private async Task ConductHandlerAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
         {
-            foreach (var lightIdentifierConducts in conducts.GroupBy(c => c.Target.Identifier))
+            var conductsTasks = conducts
+                .GroupBy(c => c.Target.Identifier)
+                .Select(lightIdentifierConducts =>
+                    this.ExecuteLightConductsAsync(cancellationToken, lightIdentifierConducts));
+            await Task.WhenAll(conductsTasks);
+        }
+
+        private async Task ExecuteLightConductsAsync(CancellationToken cancellationToken, IGrouping<string, Conduct>? lightIdentifierConducts)
+        {
+            if (lightIdentifierConducts == null) return;
+
+            try
             {
-                try
+                var lightIdentifier = lightIdentifierConducts.Key;
+                if (!this.lights.TryGetValue(ToPhilipsHueDeviceId(lightIdentifier), out var light))
                 {
-                    var lightIdentifier = lightIdentifierConducts.Key;
-                    if (!this.lights.TryGetValue(ToPhilipsHueDeviceId(lightIdentifier), out var light))
-                    {
-                        this.logger.LogWarning(
-                            "No light with specified identifier registered. Target identifier: {TargetIdentifier}",
-                            lightIdentifier);
-                        continue;
-                    }
+                    this.logger.LogWarning(
+                        "No light with specified identifier registered. Target identifier: {TargetIdentifier}",
+                        lightIdentifier);
+                    return;
+                }
 
-                    // Retrieve bridge connection
-                    var bridgeConnection = await this.GetBridgeConnectionAsync(light.BridgeId);
-                    var bridgeLight = await bridgeConnection.LocalClient.GetLightAsync(light.OnBridgeId);
-                    if (bridgeLight == null)
-                    {
-                        this.logger.LogWarning(
-                            "No light with specified identifier found on bridge. Target identifier: {TargetIdentifier}. LightBridgeId: {OnBridgeId}",
-                            lightIdentifier, light.OnBridgeId);
-                        continue;
-                    }
+                // Retrieve bridge connection
+                var bridgeConnection = await this.GetBridgeConnectionAsync(light.BridgeId);
+                var bridgeLight = await bridgeConnection.LocalClient.GetLightAsync(light.OnBridgeId);
+                if (bridgeLight == null)
+                {
+                    this.logger.LogWarning(
+                        "No light with specified identifier found on bridge. Target identifier: {TargetIdentifier}. LightBridgeId: {OnBridgeId}",
+                        lightIdentifier, light.OnBridgeId);
+                    return;
+                }
 
-                    // Construct light command from conducts
-                    var lightCommand = new LightCommand();
-                    foreach (var conduct in lightIdentifierConducts)
+                // Construct light command from conducts
+                var lightCommand = new LightCommand();
+                foreach (var conduct in lightIdentifierConducts)
+                {
+                    try
                     {
-                        try
+                        switch (conduct.Target.Contact)
                         {
-                            switch (conduct.Target.Contact)
-                            {
-                                case LightStateContactName:
-                                    lightCommand.On = conduct.Value.ToString()?.ToLowerInvariant() == "true";
-                                    break;
-                                case ColorTemperatureContactName:
-                                    if (!double.TryParse(conduct.Value.ToString(), out var temp))
-                                        throw new Exception("Invalid temperature contact value.");
+                            case LightStateContactName:
+                                lightCommand.On = conduct.Value.ToString()?.ToLowerInvariant() == "true";
+                                break;
+                            case ColorTemperatureContactName:
+                                if (!double.TryParse(conduct.Value.ToString(), out var temp))
+                                    throw new Exception("Invalid temperature contact value.");
 
-                                    lightCommand.ColorTemperature = temp
-                                        .NormalizedToMirek(
-                                            bridgeLight.Capabilities.Control.ColorTemperature.Min,
-                                            bridgeLight.Capabilities.Control.ColorTemperature.Max);
-                                    break;
-                                case BrightnessContactName:
-                                    if (!double.TryParse(conduct.Value.ToString(), out var brightness))
-                                        throw new Exception("Invalid brightness contact value.");
+                                lightCommand.ColorTemperature = temp
+                                    .NormalizedToMirek(
+                                        bridgeLight.Capabilities.Control.ColorTemperature.Min,
+                                        bridgeLight.Capabilities.Control.ColorTemperature.Max);
+                                break;
+                            case BrightnessContactName:
+                                if (!double.TryParse(conduct.Value.ToString(), out var brightness))
+                                    throw new Exception("Invalid brightness contact value.");
 
-                                    lightCommand.Brightness = (byte)brightness.Denormalize(0, 255);
-                                    break;
-                                default:
-                                    throw new NotSupportedException("Not supported contact.");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            this.logger.LogTrace(ex, "Couldn't handle conduct {@Conduct}", conduct);
-                            this.logger.LogWarning("Conduct error message: {Message} for conduct: {@Conduct}", ex.Message, conduct);
+                                lightCommand.Brightness = (byte)brightness.Denormalize(0, 255);
+                                break;
+                            default:
+                                throw new NotSupportedException("Not supported contact.");
                         }
                     }
-
-                    // Send the constructed command to the bridge
-                    this.logger.LogDebug(
-                        "Sending command to the bridge {BridgeId}: {@Command}",
-                        light.OnBridgeId, lightCommand);
-                    await bridgeConnection.LocalClient.SendCommandAsync(lightCommand, new[] { light.OnBridgeId });
-
-                    // Refresh immediately 
-                    await this.RefreshLightStateAsync(bridgeConnection, light, cancellationToken);
+                    catch (Exception ex)
+                    {
+                        this.logger.LogTrace(ex, "Couldn't handle conduct {@Conduct}", conduct);
+                        this.logger.LogWarning("Conduct error message: {Message} for conduct: {@Conduct}", ex.Message, conduct);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conducts}", lightIdentifierConducts);
-                    this.logger.LogWarning("Failed to execute conduct {@Conducts}", lightIdentifierConducts);
-                }
+
+                // Send the constructed command to the bridge
+                this.logger.LogDebug(
+                    "Sending command to the bridge {BridgeId}: {@Command}",
+                    light.OnBridgeId, lightCommand);
+                await bridgeConnection.LocalClient.SendCommandAsync(lightCommand, new[] { light.OnBridgeId });
+
+                // Refresh immediately 
+                await this.RefreshLightStateAsync(bridgeConnection, light, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogTrace(ex, "Failed to execute conduct {@Conducts}", lightIdentifierConducts);
+                this.logger.LogWarning("Failed to execute conduct {@Conducts}", lightIdentifierConducts);
             }
         }
 
