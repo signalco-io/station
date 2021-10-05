@@ -8,16 +8,16 @@ using Signal.Beacon.Core.Shell;
 
 namespace Signal.Beacon.Application.Lifetime
 {
-    public class UpdateService : IUpdateService
+    public class LinuxUpdateService : IUpdateService
     {
         private const string FilePathExecute = "./rpi-update.sh";
 
         private readonly IShellService shell;
-        private readonly ILogger<UpdateService> logger;
+        private readonly ILogger<LinuxUpdateService> logger;
 
-        public UpdateService(
+        public LinuxUpdateService(
             IShellService shell,
-            ILogger<UpdateService> logger)
+            ILogger<LinuxUpdateService> logger)
         {
             this.shell = shell ?? throw new ArgumentNullException(nameof(shell));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
