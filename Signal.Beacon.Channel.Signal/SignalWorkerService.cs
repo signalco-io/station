@@ -59,6 +59,7 @@ namespace Signal.Beacon.Channel.Signal
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             this.startCancellationToken = cancellationToken;
+            this.startCancellationToken.Register(() => _ = this.StopAsync(CancellationToken.None));
             this.configuration =
                 await this.configurationService.LoadAsync<SignalWorkerServiceConfiguration>(
                     ConfigurationFileName,
@@ -223,6 +224,8 @@ namespace Signal.Beacon.Channel.Signal
         
         public async Task StopAsync(CancellationToken cancellationToken)
         {
+            this.logger.LogDebug("Stopping Signal worker service...");
+
             foreach (var mqttClient in this.clients) 
                 await mqttClient.StopAsync(cancellationToken);
         }
