@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -13,6 +14,7 @@ using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Processes;
 using Signal.Beacon.Core.Signal;
 using JsonSerializer = System.Text.Json.JsonSerializer;
+using Process = Signal.Beacon.Core.Processes.Process;
 
 namespace Signal.Beacon.Application
 {
@@ -96,6 +98,13 @@ namespace Signal.Beacon.Application
 
         private async Task CacheProcessesAsync(CancellationToken cancellationToken)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                this.logger.LogDebug("Aborted loading processes because cancellation token is cancelled");
+                this.logger.LogDebug("Check who cancelled token. Stack: {StackTrace}", new StackTrace().ToString());
+                return;
+            }
+
             // Don't cache again if we have cache, and cache valid period didn't expire
             if (this.processes != null &&
                 this.cacheExpiry.HasValue &&

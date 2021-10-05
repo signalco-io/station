@@ -61,12 +61,21 @@ namespace Signal.Beacon.Application.Signal.SignalR
                     {
                         options.AccessTokenProvider = async () =>
                         {
+                            var retryCount = 0;
                             while (!this.StartCancellationToken.Value.IsCancellationRequested)
                             {
                                 if (await this.signalClientAuthFlow.GetTokenAsync(this.StartCancellationToken.Value) !=
                                     null)
                                     break;
-                                await Task.Delay(1000, this.StartCancellationToken.Value);
+
+                                // Abort after some time
+                                if (retryCount > 1000) 
+                                    return null;
+
+                                // Incremental Delay 
+                                var delay = ++retryCount * 1000;
+                                this.logger.LogWarning("SignalR token failed to retrieve... delayed retry in {DelayMs}ms", delay);
+                                await Task.Delay(delay, this.StartCancellationToken.Value);
                             }
 
                             var tokenResult = await this.signalClientAuthFlow.GetTokenAsync(this.StartCancellationToken.Value);
