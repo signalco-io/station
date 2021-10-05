@@ -21,7 +21,7 @@ namespace Signal.Beacon.Application.Signal
         private readonly ILogger<SignalClient> logger;
         private readonly HttpClient client = new();
         private AuthToken? token;
-        private Task<SignalBeaconRefreshTokenResponseDto?>? renewTokenTask;
+        private SemaphoreSlim renewLock = new(1, 1);
 
         public event EventHandler<AuthToken?>? OnTokenRefreshed;
 
@@ -56,31 +56,31 @@ namespace Signal.Beacon.Application.Signal
             if (DateTime.UtcNow < this.token.Expire)
                 return;
 
-            // Request new token from Signal API
-            this.renewTokenTask ??= this.PostAsJsonAsync<SignalBeaconRefreshTokenRequestDto, SignalBeaconRefreshTokenResponseDto>(
-                SignalApiBeaconRefreshTokenUrl,
-                new SignalBeaconRefreshTokenRequestDto(this.token.RefreshToken),
-                cancellationToken,
-                false);
-
-            // Wait for response
-            var response = await this.renewTokenTask;
-            if (response == null)
-                throw new Exception("Failed to retrieve refreshed token.");
-
-            // Check if someone else assigned new token already
-            if (DateTime.UtcNow < this.token.Expire)
-                return;
-
+            // Lock
             try
             {
+                await this.renewLock.WaitAsync(cancellationToken);
+
+                // Request new token from Signal API
+                var response = await this.PostAsJsonAsync<SignalBeaconRefreshTokenRequestDto, SignalBeaconRefreshTokenResponseDto>(
+                        SignalApiBeaconRefreshTokenUrl,
+                        new SignalBeaconRefreshTokenRequestDto(this.token.RefreshToken),
+                        cancellationToken,
+                        false);
+                if (response == null)
+                    throw new Exception("Failed to renew token - got null response.");
+
+                // Check if someone else assigned new token already
+                if (DateTime.UtcNow < this.token.Expire)
+                    return;
+
                 // Assign new token
                 this.AssignToken(new AuthToken(response.AccessToken, this.token.RefreshToken, response.Expire));
                 this.logger.LogDebug("Token successfully refreshed. Expires on: {TokenExpire}", this.token.Expire);
             }
             finally
             {
-                this.renewTokenTask = null;
+                this.renewLock.Release();
             }
 
             // Notify token was refreshed so it can be persisted
