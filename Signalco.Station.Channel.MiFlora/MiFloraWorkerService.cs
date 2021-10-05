@@ -133,10 +133,19 @@ namespace Signalco.Station.Channel.MiFlora
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                await this.BeginDiscoveryAsync(cancellationToken);
-                await this.ProcessDevicesAsync(cancellationToken);
-                await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
-                await this.EndDiscoveryAsync();
+                try
+                {
+                    await this.BeginDiscoveryAsync(cancellationToken);
+                    await this.ProcessDevicesAsync(cancellationToken);
+                    await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+                    await this.EndDiscoveryAsync();
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogTrace(ex, "BT Pool loop failed");
+                    this.logger.LogDebug("BT Pool loop failed");
+                }
+
                 await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken);
             }
         }
