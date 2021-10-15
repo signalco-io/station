@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -16,6 +17,7 @@ namespace Signal.Beacon.Application.Signal.SignalR
         private HubConnection? connection;
         private readonly object startLock = new();
         private bool isStarted;
+        private Dictionary<string, Func<object, Task>> actions = new();
 
         protected SignalSignalRHubHubClient(
             ISignalClientAuthFlow signalClientAuthFlow,
@@ -28,7 +30,9 @@ namespace Signal.Beacon.Application.Signal.SignalR
         protected async Task OnAsync<T>(string targetName, Func<T, Task> arg, CancellationToken cancellationToken)
         {
             await this.StartAsync(cancellationToken);
+            this.actions.TryAdd(targetName, o => arg((T)o));
             this.connection.On(targetName, arg);
+            this.logger.LogDebug("Hub assigned action {ActionName}", targetName);
         }
 
         public abstract Task StartAsync(CancellationToken cancellationToken);
@@ -104,6 +108,13 @@ namespace Signal.Beacon.Application.Signal.SignalR
                 await this.connection.StartAsync(this.StartCancellationToken.Value);
 
                 this.logger.LogInformation("{HubName} hub started", hubName);
+
+                // Reassign actions
+                foreach (var (actionName, actionFunc) in actions)
+                {
+                    this.connection.On(actionName, actionFunc);
+                    this.logger.LogDebug("{HubName} re-assigned action {ActionName}", hubName, actionName);
+                }
             }
             catch (Exception ex)
             {
