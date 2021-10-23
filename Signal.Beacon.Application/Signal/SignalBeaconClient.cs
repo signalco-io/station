@@ -36,7 +36,8 @@ internal class SignalBeaconClient : ISignalBeaconClient
             var stateDto = new StationStateDto
             {
                 Id = state.Id,
-                Version = state.Version
+                Version = state.Version,
+                RunningWorkerServices = state.RunningWorkerServices
             };
 
             await this.client.PostAsJsonAsync(

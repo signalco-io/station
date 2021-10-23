@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,11 +10,14 @@ namespace Signal.Beacon.Application.Signal;
 internal class StationStateService : IStationStateService
 {
     private readonly IConfigurationService configurationService;
+    private readonly IWorkerServiceManager workerServiceManager;
 
     public StationStateService(
-        IConfigurationService configurationService)
+        IConfigurationService configurationService,
+        IWorkerServiceManager workerServiceManager)
     {
         this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+        this.workerServiceManager = workerServiceManager ?? throw new ArgumentNullException(nameof(workerServiceManager));
     }
 
     public async Task<StationState> GetAsync(CancellationToken cancellationToken)
@@ -25,7 +29,8 @@ internal class StationStateService : IStationStateService
         return new StationState
         {
             Id = config.Identifier,
-            Version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "Unknown"
+            Version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "Unknown",
+            RunningWorkerServices = workerServiceManager.RunningWorkerServices.Select(ws => ws.GetType().FullName ?? "Unknown")
         };
     }
 }
