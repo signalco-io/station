@@ -37,6 +37,7 @@ internal class SignalBeaconClient : ISignalBeaconClient
             {
                 Id = state.Id,
                 Version = state.Version,
+                AvailableWorkerServices = state.AvailableWorkerServices,
                 RunningWorkerServices = state.RunningWorkerServices
             };
 

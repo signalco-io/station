@@ -9,4 +9,6 @@ public class StationState
     public string Version { get; init; }
 
     public IEnumerable<string> RunningWorkerServices { get; init; }
+
+    public IEnumerable<string> AvailableWorkerServices { get; init; }
 }

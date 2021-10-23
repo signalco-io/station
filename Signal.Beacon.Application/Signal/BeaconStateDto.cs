@@ -12,5 +12,8 @@ public class StationStateDto
     public string? Version { get; set; }
 
     [Required]
-    public IEnumerable<string> RunningWorkerServices { get; set; }
+    public IEnumerable<string>? AvailableWorkerServices { get; set; }
+
+    [Required]
+    public IEnumerable<string>? RunningWorkerServices { get; set; }
 }

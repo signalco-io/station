@@ -93,6 +93,12 @@ internal class ApplicationWorkerService : IWorkerService
                 case "shutdownSystem":
                     await this.updateService.ShutdownSystemAsync();
                     break;
+                case "workerService:start":
+                    await this.StartWorkerServiceAsync(conduct.Value.ToString() ?? throw new InvalidOperationException("Provide worker service name"), cancellationToken);
+                    break;
+                case "workerService:stop":
+                    await this.StopWorkerServiceAsync(conduct.Value.ToString() ?? throw new InvalidOperationException("Provide worker service name"), cancellationToken);
+                    break;
                 case "beginDiscovery":
                     await this.BeginWorkersDiscoveryAsync(cancellationToken);
                     break;
@@ -100,6 +106,32 @@ internal class ApplicationWorkerService : IWorkerService
                     throw new NotSupportedException("Not supported station conduct.");
             }
         }
+    }
+
+    private async Task StopWorkerServiceAsync(string workerServiceTypeFullName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(workerServiceTypeFullName))
+            throw new ArgumentException("Value cannot be null or whitespace.", nameof(workerServiceTypeFullName));
+
+        var ws = this.workerServiceManager.AvailableWorkerServices.FirstOrDefault(ws =>
+            ws.GetType().FullName == workerServiceTypeFullName);
+        if (ws == null)
+            throw new Exception("Requested worker service not available.");
+
+        await this.workerServiceManager.StopWorkerServiceAsync(ws);
+    }
+
+    private async Task StartWorkerServiceAsync(string workerServiceTypeFullName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(workerServiceTypeFullName))
+            throw new ArgumentException("Value cannot be null or whitespace.", nameof(workerServiceTypeFullName));
+
+        var ws = this.workerServiceManager.AvailableWorkerServices.FirstOrDefault(ws =>
+            ws.GetType().FullName == workerServiceTypeFullName);
+        if (ws == null)
+            throw new Exception("Requested worker service not available.");
+
+        await this.workerServiceManager.StartWorkerServiceAsync(ws, cancellationToken);
     }
 
     private async Task BeginWorkersDiscoveryAsync(CancellationToken cancellationToken)

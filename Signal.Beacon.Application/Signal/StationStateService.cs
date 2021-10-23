@@ -30,6 +30,7 @@ internal class StationStateService : IStationStateService
         {
             Id = config.Identifier,
             Version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "Unknown",
+            AvailableWorkerServices = workerServiceManager.AvailableWorkerServices.Select(ws => ws.GetType().FullName ?? "Unknown"),
             RunningWorkerServices = workerServiceManager.RunningWorkerServices.Select(ws => ws.GetType().FullName ?? "Unknown")
         };
     }
