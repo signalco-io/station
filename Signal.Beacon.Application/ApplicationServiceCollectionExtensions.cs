@@ -38,7 +38,7 @@ public static class ApplicationServiceCollectionExtensions
                 
         services.AddTransient<IShellService, LinuxShellService>();
         services.AddTransient<IUpdateService, LinuxUpdateService>();
-            
+
         // MQTT
         services.AddTransient<IMqttClient, MqttClient>();
         services.AddTransient<IMqttClientFactory, MqttClientFactory>();

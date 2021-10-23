@@ -52,6 +52,7 @@ public static class Program
                 //.AddVoice();
 
                 services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));
+                services.AddSingleton<IWorkerServiceManager, WorkerServiceManager>();
             })
             .UseSerilog();
 }
