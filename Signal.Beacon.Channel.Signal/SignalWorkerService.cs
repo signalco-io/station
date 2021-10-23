@@ -13,221 +13,220 @@ using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Workers;
 
-namespace Signal.Beacon.Channel.Signal
+namespace Signal.Beacon.Channel.Signal;
+
+public class SignalWorkerService : IWorkerService
 {
-    public class SignalWorkerService : IWorkerService
+    private const string ConfigurationFileName = "Signal.json";
+
+    private readonly IDevicesDao devicesDao;
+    private readonly IMqttClientFactory mqttClientFactory;
+    private readonly IMqttDiscoveryService mqttDiscoveryService;
+    private readonly IConfigurationService configurationService;
+    private readonly IConductSubscriberClient conductSubscriberClient;
+    private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
+    private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
+    private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
+    private readonly ILogger<SignalWorkerService> logger;
+    private readonly List<IMqttClient> clients = new();
+
+    private SignalWorkerServiceConfiguration configuration = new();
+    private CancellationToken startCancellationToken;
+
+    public SignalWorkerService(
+        IDevicesDao devicesDao,
+        IMqttClientFactory mqttClientFactory,
+        IMqttDiscoveryService mqttDiscoveryService,
+        IConfigurationService configurationService,
+        IConductSubscriberClient conductSubscriberClient,
+        ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
+        ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
+        ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
+        ILogger<SignalWorkerService> logger)
     {
-        private const string ConfigurationFileName = "Signal.json";
+        this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
+        this.mqttClientFactory = mqttClientFactory ?? throw new ArgumentNullException(nameof(mqttClientFactory));
+        this.mqttDiscoveryService = mqttDiscoveryService ?? throw new ArgumentNullException(nameof(mqttDiscoveryService));
+        this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+        this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
+        this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
+        this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
+        this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        private readonly IDevicesDao devicesDao;
-        private readonly IMqttClientFactory mqttClientFactory;
-        private readonly IMqttDiscoveryService mqttDiscoveryService;
-        private readonly IConfigurationService configurationService;
-        private readonly IConductSubscriberClient conductSubscriberClient;
-        private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler;
-        private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
-        private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
-        private readonly ILogger<SignalWorkerService> logger;
-        private readonly List<IMqttClient> clients = new();
 
-        private SignalWorkerServiceConfiguration configuration = new();
-        private CancellationToken startCancellationToken;
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        this.startCancellationToken = cancellationToken;
+        this.startCancellationToken.Register(() => _ = this.StopAsync(CancellationToken.None));
+        this.configuration =
+            await this.configurationService.LoadAsync<SignalWorkerServiceConfiguration>(
+                ConfigurationFileName,
+                cancellationToken);
 
-        public SignalWorkerService(
-            IDevicesDao devicesDao,
-            IMqttClientFactory mqttClientFactory,
-            IMqttDiscoveryService mqttDiscoveryService,
-            IConfigurationService configurationService,
-            IConductSubscriberClient conductSubscriberClient,
-            ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
-            ICommandHandler<DeviceStateSetCommand> deviceStateHandler,
-            ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler,
-            ILogger<SignalWorkerService> logger)
+        if (this.configuration.Servers.Any())
+            foreach (var mqttServerConfig in this.configuration.Servers.ToList())
+                this.StartMqttClientAsync(mqttServerConfig);
+        else
         {
-            this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
-            this.mqttClientFactory = mqttClientFactory ?? throw new ArgumentNullException(nameof(mqttClientFactory));
-            this.mqttDiscoveryService = mqttDiscoveryService ?? throw new ArgumentNullException(nameof(mqttDiscoveryService));
-            this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
-            this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
-            this.deviceDiscoveryHandler = deviceDiscoveryHandler ?? throw new ArgumentNullException(nameof(deviceDiscoveryHandler));
-            this.deviceStateHandler = deviceStateHandler ?? throw new ArgumentNullException(nameof(deviceStateHandler));
-            this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
-            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.DiscoverMqttBrokersAsync(cancellationToken);
         }
 
+        this.conductSubscriberClient.Subscribe(SignalChannels.DeviceChannel, this.ConductHandler);
+    }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+    private async Task ConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
+    {
+        foreach (var conduct in conducts)
         {
-            this.startCancellationToken = cancellationToken;
-            this.startCancellationToken.Register(() => _ = this.StopAsync(CancellationToken.None));
-            this.configuration =
-                await this.configurationService.LoadAsync<SignalWorkerServiceConfiguration>(
-                    ConfigurationFileName,
-                    cancellationToken);
-
-            if (this.configuration.Servers.Any())
-                foreach (var mqttServerConfig in this.configuration.Servers.ToList())
-                    this.StartMqttClientAsync(mqttServerConfig);
-            else
+            try
             {
-                this.DiscoverMqttBrokersAsync(cancellationToken);
+                var localIdentifier = conduct.Target.Identifier[7..];
+                var client = this.clients.FirstOrDefault();
+                if (client != null)
+                    await client.PublishAsync($"{conduct.Target.Channel}/{localIdentifier}/{conduct.Target.Contact}/set", conduct.Value);
             }
-
-            this.conductSubscriberClient.Subscribe(SignalChannels.DeviceChannel, this.ConductHandler);
-        }
-
-        private async Task ConductHandler(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
-        {
-            foreach (var conduct in conducts)
+            catch (Exception ex)
             {
-                try
-                {
-                    var localIdentifier = conduct.Target.Identifier[7..];
-                    var client = this.clients.FirstOrDefault();
-                    if (client != null)
-                        await client.PublishAsync($"{conduct.Target.Channel}/{localIdentifier}/{conduct.Target.Contact}/set", conduct.Value);
-                }
-                catch (Exception ex)
-                {
-                    this.logger.LogTrace(ex, "Failed to execute conduct {@Conduct}", conduct);
-                    this.logger.LogWarning("Failed to execute conduct {@Conduct}", conduct);
-                }
+                this.logger.LogTrace(ex, "Failed to execute conduct {@Conduct}", conduct);
+                this.logger.LogWarning("Failed to execute conduct {@Conduct}", conduct);
             }
         }
+    }
 
-        private async void StartMqttClientAsync(SignalWorkerServiceConfiguration.MqttServer mqttServerConfig)
+    private async void StartMqttClientAsync(SignalWorkerServiceConfiguration.MqttServer mqttServerConfig)
+    {
+        var client = this.mqttClientFactory.Create();
+        await client.StartAsync("Signal.Beacon.Channel.Signal", mqttServerConfig.Url, this.startCancellationToken);
+        await client.SubscribeAsync("signal/discovery/#", this.DiscoverDevicesAsync);
+        this.clients.Add(client);
+    }
+
+    private async Task DiscoverDevicesAsync(MqttMessage message)
+    {
+        var config = JsonSerializer.Deserialize<SignalDeviceConfig>(message.Payload);
+        if (config == null)
         {
-            var client = this.mqttClientFactory.Create();
-            await client.StartAsync("Signal.Beacon.Channel.Signal", mqttServerConfig.Url, this.startCancellationToken);
-            await client.SubscribeAsync("signal/discovery/#", this.DiscoverDevicesAsync);
-            this.clients.Add(client);
+            this.logger.LogWarning("Device discovery message contains invalid configuration.");
+            return;
         }
 
-        private async Task DiscoverDevicesAsync(MqttMessage message)
+        var discoveryType = message.Topic.Split("/", StringSplitOptions.RemoveEmptyEntries).Last();
+        if (discoveryType == "config")
         {
-            var config = JsonSerializer.Deserialize<SignalDeviceConfig>(message.Payload);
-            if (config == null)
-            {
-                this.logger.LogWarning("Device discovery message contains invalid configuration.");
-                return;
-            }
+            var deviceIdentifier = $"{SignalChannels.DeviceChannel}/{config.MqttTopic}";
 
-            var discoveryType = message.Topic.Split("/", StringSplitOptions.RemoveEmptyEntries).Last();
-            if (discoveryType == "config")
+            try
             {
-                var deviceIdentifier = $"{SignalChannels.DeviceChannel}/{config.MqttTopic}";
+                // Signal new device discovered
+                await this.deviceDiscoveryHandler.HandleAsync(
+                    new DeviceDiscoveredCommand(
+                        config.Alias ?? (config.WifiHostname ?? deviceIdentifier),
+                        deviceIdentifier),
+                    this.startCancellationToken);
 
-                try
+                // Configure contacts if available in config
+                if (config.Contacts != null)
                 {
-                    // Signal new device discovered
-                    await this.deviceDiscoveryHandler.HandleAsync(
-                        new DeviceDiscoveredCommand(
-                            config.Alias ?? (config.WifiHostname ?? deviceIdentifier),
-                            deviceIdentifier),
-                        this.startCancellationToken);
+                    // Retrieve device
+                    var device = await this.devicesDao.GetAsync(deviceIdentifier, this.startCancellationToken);
+                    if (device == null)
+                        throw new Exception($"Device not found with identifier: {deviceIdentifier}");
 
-                    // Configure contacts if available in config
-                    if (config.Contacts != null)
+                    foreach (var configContact in config.Contacts)
                     {
-                        // Retrieve device
-                        var device = await this.devicesDao.GetAsync(deviceIdentifier, this.startCancellationToken);
-                        if (device == null)
-                            throw new Exception($"Device not found with identifier: {deviceIdentifier}");
-
-                        foreach (var configContact in config.Contacts)
+                        try
                         {
-                            try
+                            if (configContact.Name != null &&
+                                configContact.DataType != null)
                             {
-                                if (configContact.Name != null &&
-                                    configContact.DataType != null)
-                                {
-                                    await this.deviceContactUpdateHandler.HandleAsync(
-                                        DeviceContactUpdateCommand.FromDevice(
-                                            device,
-                                            SignalChannels.DeviceChannel,
-                                            configContact.Name,
-                                            c => c with
-                                            {
-                                                DataType = configContact.DataType,
-                                                Access = configContact.Access ?? DeviceContactAccess.None,
-                                            }),
-                                        this.startCancellationToken);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                this.logger.LogTrace(ex, "Failed to update contact.");
-                                this.logger.LogWarning("Failed to update contact for contact {DeviceIdentifier} {ContactName}", deviceIdentifier, configContact.Name);
+                                await this.deviceContactUpdateHandler.HandleAsync(
+                                    DeviceContactUpdateCommand.FromDevice(
+                                        device,
+                                        SignalChannels.DeviceChannel,
+                                        configContact.Name,
+                                        c => c with
+                                        {
+                                            DataType = configContact.DataType,
+                                            Access = configContact.Access ?? DeviceContactAccess.None,
+                                        }),
+                                    this.startCancellationToken);
                             }
                         }
+                        catch (Exception ex)
+                        {
+                            this.logger.LogTrace(ex, "Failed to update contact.");
+                            this.logger.LogWarning("Failed to update contact for contact {DeviceIdentifier} {ContactName}", deviceIdentifier, configContact.Name);
+                        }
                     }
-
-                    // Subscribe for device telemetry
-                    var telemetrySubscribeTopic = $"signal/{config.MqttTopic}/#";
-                    await message.Client.SubscribeAsync(telemetrySubscribeTopic,
-                        msg => this.TelemetryHandlerAsync($"{SignalChannels.DeviceChannel}/{config.MqttTopic}",
-                            msg));
-                }
-                catch (Exception ex)
-                {
-                    this.logger.LogTrace(ex, "Failed to configure device {Name} ({Identifier})",
-                        config.WifiHostname, deviceIdentifier);
-                    this.logger.LogWarning("Failed to configure device {Name} ({Identifier})",
-                        config.WifiHostname, deviceIdentifier);
                 }
 
-                // Publish telemetry refresh request
-                await message.Client.PublishAsync($"signal/{config.MqttTopic}/get", "get");
+                // Subscribe for device telemetry
+                var telemetrySubscribeTopic = $"signal/{config.MqttTopic}/#";
+                await message.Client.SubscribeAsync(telemetrySubscribeTopic,
+                    msg => this.TelemetryHandlerAsync($"{SignalChannels.DeviceChannel}/{config.MqttTopic}",
+                        msg));
             }
-        }
-
-        private async Task TelemetryHandlerAsync(string deviceIdentifier, MqttMessage message)
-        {
-            // Check topic
-            var isTelemetry = deviceIdentifier == message.Topic;
-            if (!isTelemetry)
-                return;
-
-            // Check contacts available
-            var telemetry = JsonSerializer.Deserialize<SignalSensorTelemetryDto>(message.Payload);
-            if (telemetry?.Contacts == null)
-                return;
-
-            // Process contacts
-            foreach (var telemetryContact in telemetry.Contacts)
+            catch (Exception ex)
             {
-                if (telemetryContact.ContactName != null)
-                {
-                    await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
-                            new DeviceTarget(SignalChannels.DeviceChannel, deviceIdentifier,
-                                telemetryContact.ContactName),
-                            telemetryContact.Value),
-                        this.startCancellationToken);
-                }
+                this.logger.LogTrace(ex, "Failed to configure device {Name} ({Identifier})",
+                    config.WifiHostname, deviceIdentifier);
+                this.logger.LogWarning("Failed to configure device {Name} ({Identifier})",
+                    config.WifiHostname, deviceIdentifier);
             }
-        }
 
-        private async void DiscoverMqttBrokersAsync(CancellationToken cancellationToken)
+            // Publish telemetry refresh request
+            await message.Client.PublishAsync($"signal/{config.MqttTopic}/get", "get");
+        }
+    }
+
+    private async Task TelemetryHandlerAsync(string deviceIdentifier, MqttMessage message)
+    {
+        // Check topic
+        var isTelemetry = deviceIdentifier == message.Topic;
+        if (!isTelemetry)
+            return;
+
+        // Check contacts available
+        var telemetry = JsonSerializer.Deserialize<SignalSensorTelemetryDto>(message.Payload);
+        if (telemetry?.Contacts == null)
+            return;
+
+        // Process contacts
+        foreach (var telemetryContact in telemetry.Contacts)
         {
-            var availableBrokers =
-                await this.mqttDiscoveryService.DiscoverMqttBrokerHostsAsync("signal/#", cancellationToken);
-            foreach (var availableBroker in availableBrokers)
+            if (telemetryContact.ContactName != null)
             {
-                this.configuration.Servers.Add(new SignalWorkerServiceConfiguration.MqttServer
-                    { Url = availableBroker.IpAddress });
-                await this.configurationService.SaveAsync(ConfigurationFileName, this.configuration, cancellationToken);
-                this.StartMqttClientAsync(
-                    new SignalWorkerServiceConfiguration.MqttServer
-                        {Url = availableBroker.IpAddress});
+                await this.deviceStateHandler.HandleAsync(new DeviceStateSetCommand(
+                        new DeviceTarget(SignalChannels.DeviceChannel, deviceIdentifier,
+                            telemetryContact.ContactName),
+                        telemetryContact.Value),
+                    this.startCancellationToken);
             }
         }
+    }
+
+    private async void DiscoverMqttBrokersAsync(CancellationToken cancellationToken)
+    {
+        var availableBrokers =
+            await this.mqttDiscoveryService.DiscoverMqttBrokerHostsAsync("signal/#", cancellationToken);
+        foreach (var availableBroker in availableBrokers)
+        {
+            this.configuration.Servers.Add(new SignalWorkerServiceConfiguration.MqttServer
+                { Url = availableBroker.IpAddress });
+            await this.configurationService.SaveAsync(ConfigurationFileName, this.configuration, cancellationToken);
+            this.StartMqttClientAsync(
+                new SignalWorkerServiceConfiguration.MqttServer
+                    {Url = availableBroker.IpAddress});
+        }
+    }
         
-        public async Task StopAsync(CancellationToken cancellationToken)
-        {
-            this.logger.LogDebug("Stopping Signal worker service...");
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        this.logger.LogDebug("Stopping Signal worker service...");
 
-            foreach (var mqttClient in this.clients) 
-                await mqttClient.StopAsync(cancellationToken);
-        }
+        foreach (var mqttClient in this.clients) 
+            await mqttClient.StopAsync(cancellationToken);
     }
 }

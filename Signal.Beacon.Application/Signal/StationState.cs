@@ -1,9 +1,8 @@
-﻿namespace Signal.Beacon.Application.Signal
-{
-    public class StationState
-    {
-        public string Id { get; init; }
+﻿namespace Signal.Beacon.Application.Signal;
 
-        public string Version { get; init; }
-    }
+public class StationState
+{
+    public string Id { get; init; }
+
+    public string Version { get; init; }
 }

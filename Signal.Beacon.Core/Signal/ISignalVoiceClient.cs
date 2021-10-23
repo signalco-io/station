@@ -1,10 +1,9 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Core.Signal
+namespace Signal.Beacon.Core.Signal;
+
+public interface ISignalVoiceClient
 {
-    public interface ISignalVoiceClient
-    {
-        Task<byte[]> GetTextAudioAsync(string text, CancellationToken cancellationToken);
-    }
+    Task<byte[]> GetTextAudioAsync(string text, CancellationToken cancellationToken);
 }

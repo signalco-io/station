@@ -4,14 +4,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Conducts;
 
-namespace Signal.Beacon.Application.Conducts
+namespace Signal.Beacon.Application.Conducts;
+
+internal interface IConductManager
 {
-    internal interface IConductManager
-    {
-        Task StartAsync(CancellationToken cancellationToken);
+    Task StartAsync(CancellationToken cancellationToken);
 
-        IDisposable Subscribe(string channel, Func<IEnumerable<Conduct>, CancellationToken, Task> handler);
+    IDisposable Subscribe(string channel, Func<IEnumerable<Conduct>, CancellationToken, Task> handler);
 
-        Task PublishAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken);
-    }
+    Task PublishAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken);
 }

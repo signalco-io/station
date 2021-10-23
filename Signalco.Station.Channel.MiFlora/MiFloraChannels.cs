@@ -1,7 +1,6 @@
-﻿namespace Signalco.Station.Channel.MiFlora
+﻿namespace Signalco.Station.Channel.MiFlora;
+
+internal static class MiFloraChannels
 {
-    internal static class MiFloraChannels
-    {
-        public const string MiFlora = "miflora";
-    }
+    public const string MiFlora = "miflora";
 }

@@ -1,13 +1,12 @@
 using System.Collections.Generic;
 
-namespace Signal.Beacon.Channel.Zigbee2Mqtt
+namespace Signal.Beacon.Channel.Zigbee2Mqtt;
+
+internal class BridgeDeviceDefinition
 {
-    internal class BridgeDeviceDefinition
-    {
-        public string? Model { get; set; }
+    public string? Model { get; set; }
 
-        public string? Vendor { get; set; }
+    public string? Vendor { get; set; }
 
-        public List<BridgeDeviceExposeFeature>? Exposes { get; set; }
-    }
+    public List<BridgeDeviceExposeFeature>? Exposes { get; set; }
 }

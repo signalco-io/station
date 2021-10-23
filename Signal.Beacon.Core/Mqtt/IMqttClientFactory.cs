@@ -1,7 +1,6 @@
-namespace Signal.Beacon.Core.Mqtt
+namespace Signal.Beacon.Core.Mqtt;
+
+public interface IMqttClientFactory
 {
-    public interface IMqttClientFactory
-    {
-        IMqttClient Create();
-    }
+    IMqttClient Create();
 }

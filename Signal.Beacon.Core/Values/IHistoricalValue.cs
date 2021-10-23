@@ -1,11 +1,10 @@
 ﻿using System;
 
-namespace Signal.Beacon.Core.Values
-{
-    public interface IHistoricalValue
-    {
-        object? Value { get; }
+namespace Signal.Beacon.Core.Values;
 
-        DateTime TimeStamp { get; }
-    }
+public interface IHistoricalValue
+{
+    object? Value { get; }
+
+    DateTime TimeStamp { get; }
 }

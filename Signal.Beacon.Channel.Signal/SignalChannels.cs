@@ -1,7 +1,6 @@
-﻿namespace Signal.Beacon.Channel.Signal
+﻿namespace Signal.Beacon.Channel.Signal;
+
+public static class SignalChannels
 {
-    public static class SignalChannels
-    {
-        public const string DeviceChannel = "signal";
-    }
+    public const string DeviceChannel = "signal";
 }

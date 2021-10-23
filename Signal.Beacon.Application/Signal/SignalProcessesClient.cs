@@ -6,35 +6,34 @@ using System.Threading.Tasks;
 using Signal.Beacon.Core.Processes;
 using Signal.Beacon.Core.Signal;
 
-namespace Signal.Beacon.Application.Signal
+namespace Signal.Beacon.Application.Signal;
+
+internal class SignalProcessesClient : ISignalProcessesClient
 {
-    internal class SignalProcessesClient : ISignalProcessesClient
+    private const string SignalApiProcessesGetUrl = "/processes";
+        
+    private readonly ISignalClient client;
+
+    public SignalProcessesClient(
+        ISignalClient client)
     {
-        private const string SignalApiProcessesGetUrl = "/processes";
-        
-        private readonly ISignalClient client;
-
-        public SignalProcessesClient(
-            ISignalClient client)
-        {
-            this.client = client ?? throw new ArgumentNullException(nameof(client));
-        }
+        this.client = client ?? throw new ArgumentNullException(nameof(client));
+    }
         
 
-        public async Task<IEnumerable<Process>> GetProcessesAsync(CancellationToken cancellationToken)
-        {
-            var response = await this.client.GetAsync<IEnumerable<SignalProcessDto>>(
-                SignalApiProcessesGetUrl,
-                cancellationToken);
-            if (response == null)
-                throw new Exception("Failed to retrieve processes from API.");
+    public async Task<IEnumerable<Process>> GetProcessesAsync(CancellationToken cancellationToken)
+    {
+        var response = await this.client.GetAsync<IEnumerable<SignalProcessDto>>(
+            SignalApiProcessesGetUrl,
+            cancellationToken);
+        if (response == null)
+            throw new Exception("Failed to retrieve processes from API.");
 
-            return response.Select(p => new Process(
-                p.Type ?? throw new Exception("Got process with no Type."),
-                p.Id ?? throw new Exception("Got process with no ID."),
-                p.Alias ?? throw new Exception("Got process with no Alias."),
-                p.IsDisabled ?? false,
-                p.ConfigurationSerialized));
-        }
+        return response.Select(p => new Process(
+            p.Type ?? throw new Exception("Got process with no Type."),
+            p.Id ?? throw new Exception("Got process with no ID."),
+            p.Alias ?? throw new Exception("Got process with no Alias."),
+            p.IsDisabled ?? false,
+            p.ConfigurationSerialized));
     }
 }

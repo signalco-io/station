@@ -15,44 +15,43 @@ using Signal.Beacon.Configuration;
 using Signal.Beacon.Core.Helpers;
 using Signalco.Station.Channel.MiFlora;
 
-namespace Signal.Beacon
+namespace Signal.Beacon;
+
+public static class Program
 {
-    public static class Program
+    public static void Main(string[] args)
     {
-        public static void Main(string[] args)
-        {
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-                .Enrich.FromLogContext()
-                .WriteTo.File("Logs/log.log", rollingInterval: RollingInterval.Day,
-                    retainedFileTimeLimit: TimeSpan.FromDays(7))
-                .WriteTo.Console()
-                .CreateLogger();
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+            .Enrich.FromLogContext()
+            .WriteTo.File("Logs/log.log", rollingInterval: RollingInterval.Day,
+                retainedFileTimeLimit: TimeSpan.FromDays(7))
+            .WriteTo.Console()
+            .CreateLogger();
 
-            CreateHostBuilder(args).Build().Run();
-        }
-
-        private static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureServices(services =>
-                {
-                    services
-                        .AddHostedService<Worker>()
-                        .AddBeaconConfiguration()
-                        .AddBeaconApplication()
-                        .AddSignalApi()
-                        .AddZigbee2Mqtt()
-                        .AddTasmota()
-                        .AddSignal()
-                        .AddPhilipsHue()
-                        .AddSamsung()
-                        .AddMiFlora()
-                        .AddIRobot();
-                        //.AddVoice();
-
-                    services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));
-                })
-                .UseSerilog();
+        CreateHostBuilder(args).Build().Run();
     }
+
+    private static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .ConfigureServices(services =>
+            {
+                services
+                    .AddHostedService<Worker>()
+                    .AddBeaconConfiguration()
+                    .AddBeaconApplication()
+                    .AddSignalApi()
+                    .AddZigbee2Mqtt()
+                    .AddTasmota()
+                    .AddSignal()
+                    .AddPhilipsHue()
+                    .AddSamsung()
+                    .AddMiFlora()
+                    .AddIRobot();
+                //.AddVoice();
+
+                services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));
+            })
+            .UseSerilog();
 }

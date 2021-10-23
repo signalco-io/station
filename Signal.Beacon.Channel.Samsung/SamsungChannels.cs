@@ -1,7 +1,6 @@
-﻿namespace Signal.Beacon.Channel.Samsung
+﻿namespace Signal.Beacon.Channel.Samsung;
+
+internal static class SamsungChannels
 {
-    internal static class SamsungChannels
-    {
-        public const string SamsungChannel = "samsung";
-    }
+    public const string SamsungChannel = "samsung";
 }

@@ -1,15 +1,14 @@
 ﻿using System;
 
-namespace Signal.Beacon.Application.Signal
+namespace Signal.Beacon.Application.Signal;
+
+public class SignalDeviceContactStateDto
 {
-    public class SignalDeviceContactStateDto
-    {
-        public string Name { get; set; }
+    public string Name { get; set; }
 
-        public string Channel { get; set; }
+    public string Channel { get; set; }
 
-        public string? ValueSerialized { get; set; }
+    public string? ValueSerialized { get; set; }
 
-        public DateTime TimeStamp { get; set; }
-    }
+    public DateTime TimeStamp { get; set; }
 }

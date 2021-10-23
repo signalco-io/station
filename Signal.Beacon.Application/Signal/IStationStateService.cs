@@ -1,10 +1,9 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Application.Signal
+namespace Signal.Beacon.Application.Signal;
+
+public interface IStationStateService
 {
-    public interface IStationStateService
-    {
-        Task<StationState> GetAsync(CancellationToken cancellationToken);
-    }
+    Task<StationState> GetAsync(CancellationToken cancellationToken);
 }

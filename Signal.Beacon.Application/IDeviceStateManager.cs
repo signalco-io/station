@@ -4,14 +4,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Devices;
 
-namespace Signal.Beacon.Application
+namespace Signal.Beacon.Application;
+
+public interface IDeviceStateManager
 {
-    public interface IDeviceStateManager
-    {
-        IDisposable Subscribe(Func<IEnumerable<DeviceTarget>, CancellationToken, Task> handler);
+    IDisposable Subscribe(Func<IEnumerable<DeviceTarget>, CancellationToken, Task> handler);
 
-        Task SetStateAsync(DeviceTarget target, object? value, CancellationToken cancellationToken);
+    Task SetStateAsync(DeviceTarget target, object? value, CancellationToken cancellationToken);
 
-        Task<object?> GetStateAsync(DeviceTarget target);
-    }
+    Task<object?> GetStateAsync(DeviceTarget target);
 }

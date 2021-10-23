@@ -16,50 +16,49 @@ using Signal.Beacon.Core.Processes;
 using Signal.Beacon.Core.Shell;
 using Signal.Beacon.Core.Workers;
 
-namespace Signal.Beacon.Application
+namespace Signal.Beacon.Application;
+
+public static class ApplicationServiceCollectionExtensions
 {
-    public static class ApplicationServiceCollectionExtensions
+    public static IServiceCollection AddBeaconApplication(this IServiceCollection services)
     {
-        public static IServiceCollection AddBeaconApplication(this IServiceCollection services)
-        {
-            services.AddTransient<IWorkerService, ApplicationWorkerService>();
+        services.AddTransient<IWorkerService, ApplicationWorkerService>();
 
-            services.AddTransient<IConditionEvaluatorService, ConditionEvaluatorService>();
-            services.AddSingleton<IConditionEvaluatorValueProvider, ConditionEvaluatorValueProvider>();
-            services.AddTransient<ICommandHandler<DeviceStateSetCommand>, DevicesCommandHandler>();
-            services.AddTransient<ICommandHandler<DeviceDiscoveredCommand>, DevicesCommandHandler>();
-            services.AddTransient<ICommandValueHandler<DeviceDiscoveredCommand, string>, DevicesCommandHandler>();
-            services.AddTransient<ICommandHandler<DeviceContactUpdateCommand>, DevicesCommandHandler>();
-            services.AddTransient<ICommandHandler<ConductPublishCommand>, ConductManager>();
-            services.AddTransient<IProcessesService, ProcessesService>();
-            services.AddSingleton<IDevicesDao, DevicesDao>();
-            services.AddSingleton<IProcessesDao, ProcessesDao>();
-            services.AddSingleton<IDeviceStateManager, DeviceStateManager>();
+        services.AddTransient<IConditionEvaluatorService, ConditionEvaluatorService>();
+        services.AddSingleton<IConditionEvaluatorValueProvider, ConditionEvaluatorValueProvider>();
+        services.AddTransient<ICommandHandler<DeviceStateSetCommand>, DevicesCommandHandler>();
+        services.AddTransient<ICommandHandler<DeviceDiscoveredCommand>, DevicesCommandHandler>();
+        services.AddTransient<ICommandValueHandler<DeviceDiscoveredCommand, string>, DevicesCommandHandler>();
+        services.AddTransient<ICommandHandler<DeviceContactUpdateCommand>, DevicesCommandHandler>();
+        services.AddTransient<ICommandHandler<ConductPublishCommand>, ConductManager>();
+        services.AddTransient<IProcessesService, ProcessesService>();
+        services.AddSingleton<IDevicesDao, DevicesDao>();
+        services.AddSingleton<IProcessesDao, ProcessesDao>();
+        services.AddSingleton<IDeviceStateManager, DeviceStateManager>();
                 
-            services.AddTransient<IShellService, LinuxShellService>();
-            services.AddTransient<IUpdateService, LinuxUpdateService>();
+        services.AddTransient<IShellService, LinuxShellService>();
+        services.AddTransient<IUpdateService, LinuxUpdateService>();
             
-            // MQTT
-            services.AddTransient<IMqttClient, MqttClient>();
-            services.AddTransient<IMqttClientFactory, MqttClientFactory>();
-            services.AddTransient<IMqttDiscoveryService, MqttDiscoveryService>();
+        // MQTT
+        services.AddTransient<IMqttClient, MqttClient>();
+        services.AddTransient<IMqttClientFactory, MqttClientFactory>();
+        services.AddTransient<IMqttDiscoveryService, MqttDiscoveryService>();
 
-            // PubSub
-            services.AddTransient<IPubSubHub<DeviceTarget>, PubSubHub<DeviceTarget>>();
-            services.AddTransient<IPubSubTopicHub<Conduct>, PubSubTopicHub<Conduct>>();
+        // PubSub
+        services.AddTransient<IPubSubHub<DeviceTarget>, PubSubHub<DeviceTarget>>();
+        services.AddTransient<IPubSubTopicHub<Conduct>, PubSubTopicHub<Conduct>>();
 
-            // Processing
-            services.AddSingleton<IProcessor, Processor>();
+        // Processing
+        services.AddSingleton<IProcessor, Processor>();
 
-            // Conducts
-            services.AddSingleton<IConductManager, ConductManager>();
-            services.AddTransient<IConductSubscriberClient, ConductSubscriberClient>();
+        // Conducts
+        services.AddSingleton<IConductManager, ConductManager>();
+        services.AddTransient<IConductSubscriberClient, ConductSubscriberClient>();
 
-            // Network
-            services.AddTransient<IHostInfoService, HostInfoService>();
-            services.AddTransient<IMacLookupService, MacLookupService>();
+        // Network
+        services.AddTransient<IHostInfoService, HostInfoService>();
+        services.AddTransient<IMacLookupService, MacLookupService>();
 
-            return services;
-        }
+        return services;
     }
 }

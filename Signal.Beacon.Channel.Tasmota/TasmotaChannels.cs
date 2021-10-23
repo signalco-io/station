@@ -1,7 +1,6 @@
-﻿namespace Signal.Beacon.Channel.Tasmota
+﻿namespace Signal.Beacon.Channel.Tasmota;
+
+public static class TasmotaChannels
 {
-    public static class TasmotaChannels
-    {
-        public const string DeviceChannel = "tasmota";
-    }
+    public const string DeviceChannel = "tasmota";
 }

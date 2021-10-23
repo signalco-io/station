@@ -1,11 +1,10 @@
 using Signal.Beacon.Application.Auth;
 
-namespace Signal.Beacon.Application.Signal
-{
-    public class BeaconConfiguration
-    {
-        public string? Identifier { get; set; }
+namespace Signal.Beacon.Application.Signal;
 
-        public AuthToken? Token { get; set; }
-    }
+public class BeaconConfiguration
+{
+    public string? Identifier { get; set; }
+
+    public AuthToken? Token { get; set; }
 }

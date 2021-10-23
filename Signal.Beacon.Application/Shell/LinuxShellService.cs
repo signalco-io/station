@@ -5,51 +5,50 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Shell;
 
-namespace Signal.Beacon.Application.Shell
+namespace Signal.Beacon.Application.Shell;
+
+internal class LinuxShellService : IShellService
 {
-    internal class LinuxShellService : IShellService
+    private readonly ILogger<LinuxShellService> logger;
+
+    public LinuxShellService(
+        ILogger<LinuxShellService> logger)
     {
-        private readonly ILogger<LinuxShellService> logger;
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        public LinuxShellService(
-            ILogger<LinuxShellService> logger)
+    public async Task ExecuteShellCommandAsync(string command, CancellationToken cancellationToken)
+    {
+        using var process = new Process();
+        var processRef = new WeakReference<Process>(process);
+        process.StartInfo = new ProcessStartInfo
         {
-            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+            FileName = "/bin/bash",
+            Arguments = $"-c \"{command}\""
+        };
 
-        public async Task ExecuteShellCommandAsync(string command, CancellationToken cancellationToken)
+        _ = Task.Run(() =>
         {
-            using var process = new Process();
-            var processRef = new WeakReference<Process>(process);
-            process.StartInfo = new ProcessStartInfo
+            while (processRef.TryGetTarget(out var proc) && !proc.HasExited &&
+                   !cancellationToken.IsCancellationRequested)
             {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"{command}\""
-            };
+                var errorLine = proc.StandardError.ReadLine();
+                this.logger.LogDebug("Update ERROR > {Line}", errorLine);
+            }
+        }, cancellationToken);
 
-            _ = Task.Run(() =>
+        _ = Task.Run(() =>
+        {
+            while (processRef.TryGetTarget(out var proc) && !proc.HasExited &&
+                   !cancellationToken.IsCancellationRequested)
             {
-                while (processRef.TryGetTarget(out var proc) && !proc.HasExited &&
-                       !cancellationToken.IsCancellationRequested)
-                {
-                    var errorLine = proc.StandardError.ReadLine();
-                    this.logger.LogDebug("Update ERROR > {Line}", errorLine);
-                }
-            }, cancellationToken);
+                var outputLine = proc.StandardOutput.ReadLine();
+                this.logger.LogDebug("Update INFO > {Line}", outputLine);
+            }
+        }, cancellationToken);
 
-            _ = Task.Run(() =>
-            {
-                while (processRef.TryGetTarget(out var proc) && !proc.HasExited &&
-                       !cancellationToken.IsCancellationRequested)
-                {
-                    var outputLine = proc.StandardOutput.ReadLine();
-                    this.logger.LogDebug("Update INFO > {Line}", outputLine);
-                }
-            }, cancellationToken);
+        process.Start();
 
-            process.Start();
-
-            await process.WaitForExitAsync(cancellationToken);
-        }
+        await process.WaitForExitAsync(cancellationToken);
     }
 }

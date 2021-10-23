@@ -1,19 +1,18 @@
 ﻿using System.Collections.Generic;
 
-namespace Signal.Beacon.Channel.Tasmota
+namespace Signal.Beacon.Channel.Tasmota;
+
+internal class TasmotaWorkerServiceConfiguration
 {
-    internal class TasmotaWorkerServiceConfiguration
+    public List<MqttServer> Servers { get; } = new();
+
+    public class MqttServer
     {
-        public List<MqttServer> Servers { get; } = new();
+        public string Url { get; }
 
-        public class MqttServer
+        public MqttServer(string url)
         {
-            public string Url { get; }
-
-            public MqttServer(string url)
-            {
-                this.Url = url;
-            }
+            this.Url = url;
         }
     }
 }

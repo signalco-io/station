@@ -1,14 +1,13 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Signal.Beacon.Core.Workers;
 
-namespace Signalco.Station.Channel.MiFlora
+namespace Signalco.Station.Channel.MiFlora;
+
+public static class MiFloraWorkerServiceCollectionExtensions
 {
-    public static class MiFloraWorkerServiceCollectionExtensions
+    public static IServiceCollection AddMiFlora(this IServiceCollection services)
     {
-        public static IServiceCollection AddMiFlora(this IServiceCollection services)
-        {
-            return services
-                .AddTransient<IWorkerService, MiFloraWorkerService>();
-        }
+        return services
+            .AddTransient<IWorkerService, MiFloraWorkerService>();
     }
 }

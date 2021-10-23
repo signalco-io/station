@@ -1,10 +1,9 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Core.Network
+namespace Signal.Beacon.Core.Network;
+
+public interface IMacLookupService
 {
-    public interface IMacLookupService
-    {
-        Task<string?> CompanyNameLookupAsync(string physicalAddress, CancellationToken cancellationToken);
-    }
+    Task<string?> CompanyNameLookupAsync(string physicalAddress, CancellationToken cancellationToken);
 }

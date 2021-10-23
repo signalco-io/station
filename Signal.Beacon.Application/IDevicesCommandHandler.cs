@@ -1,13 +1,12 @@
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Devices;
 
-namespace Signal.Beacon.Application
+namespace Signal.Beacon.Application;
+
+internal interface IDevicesCommandHandler :
+    ICommandHandler<DeviceStateSetCommand>,
+    ICommandHandler<DeviceDiscoveredCommand>,
+    ICommandValueHandler<DeviceDiscoveredCommand, string>,
+    ICommandHandler<DeviceContactUpdateCommand>
 {
-    internal interface IDevicesCommandHandler :
-        ICommandHandler<DeviceStateSetCommand>,
-        ICommandHandler<DeviceDiscoveredCommand>,
-        ICommandValueHandler<DeviceDiscoveredCommand, string>,
-        ICommandHandler<DeviceContactUpdateCommand>
-    {
-    }
 }

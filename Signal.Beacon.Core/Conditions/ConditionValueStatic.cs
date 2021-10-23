@@ -1,4 +1,3 @@
-namespace Signal.Beacon.Core.Conditions
-{
-    public record ConditionValueStatic(object? Value) : IConditionValue;
-}
+namespace Signal.Beacon.Core.Conditions;
+
+public record ConditionValueStatic(object? Value) : IConditionValue;

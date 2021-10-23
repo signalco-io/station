@@ -1,10 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Core.Conditions
+namespace Signal.Beacon.Core.Conditions;
+
+public interface IConditionEvaluatorService
 {
-    public interface IConditionEvaluatorService
-    {
-        Task<bool> IsConditionMetAsync(IConditionComparable? comparable, CancellationToken cancellationToken);
-    }
+    Task<bool> IsConditionMetAsync(IConditionComparable? comparable, CancellationToken cancellationToken);
 }

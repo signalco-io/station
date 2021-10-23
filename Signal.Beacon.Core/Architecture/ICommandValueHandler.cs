@@ -1,10 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Core.Architecture
+namespace Signal.Beacon.Core.Architecture;
+
+public interface ICommandValueHandler<in T, TValue> where T : ICommand
 {
-    public interface ICommandValueHandler<in T, TValue> where T : ICommand
-    {
-        Task<TValue> HandleAsync(T command, CancellationToken cancellationToken);
-    }
+    Task<TValue> HandleAsync(T command, CancellationToken cancellationToken);
 }

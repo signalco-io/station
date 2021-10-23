@@ -1,7 +1,6 @@
-namespace Signal.Beacon.Core.Conditions
+namespace Signal.Beacon.Core.Conditions;
+
+public interface IConditionComparable
 {
-    public interface IConditionComparable
-    {
-        public ConditionOperation Operation { get; }
-    }
+    public ConditionOperation Operation { get; }
 }

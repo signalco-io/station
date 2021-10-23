@@ -1,14 +1,13 @@
 ﻿using System;
 using System.Text.Json.Serialization;
 
-namespace Signal.Beacon.Channel.Tasmota
-{
-    public class TasmotaSensorTelemetry
-    {
-        [JsonPropertyName("Time")]
-        public DateTime Time { get; set; }
+namespace Signal.Beacon.Channel.Tasmota;
 
-        [JsonPropertyName("ANALOG")]
-        public TasmotaSensorTelemetryAnalog? Analog { get; set; }
-    }
+public class TasmotaSensorTelemetry
+{
+    [JsonPropertyName("Time")]
+    public DateTime Time { get; set; }
+
+    [JsonPropertyName("ANALOG")]
+    public TasmotaSensorTelemetryAnalog? Analog { get; set; }
 }

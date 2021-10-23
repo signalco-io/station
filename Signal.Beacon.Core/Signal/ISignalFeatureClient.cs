@@ -1,6 +1,5 @@
-﻿namespace Signal.Beacon.Core.Signal
+﻿namespace Signal.Beacon.Core.Signal;
+
+public interface ISignalFeatureClient
 {
-    public interface ISignalFeatureClient
-    {
-    }
 }

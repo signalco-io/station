@@ -1,10 +1,9 @@
-namespace Signal.Beacon.Core.Conditions
+namespace Signal.Beacon.Core.Conditions;
+
+public enum ConditionOperation
 {
-    public enum ConditionOperation
-    {
-        Result,
-        And,
-        Or,
-        Xor
-    }
+    Result,
+    And,
+    Or,
+    Xor
 }

@@ -1,6 +1,5 @@
-namespace Signal.Beacon.Core.Processes
+namespace Signal.Beacon.Core.Processes;
+
+public interface IProcessConfiguration
 {
-    public interface IProcessConfiguration
-    {
-    }
 }

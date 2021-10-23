@@ -1,15 +1,14 @@
 using System.Text.Json.Serialization;
 
-namespace Signal.Beacon.Channel.Zigbee2Mqtt
+namespace Signal.Beacon.Channel.Zigbee2Mqtt;
+
+internal class BridgeDevice
 {
-    internal class BridgeDevice
-    {
-        [JsonPropertyName("ieee_address")]
-        public string? IeeeAddress { get; set; }
+    [JsonPropertyName("ieee_address")]
+    public string? IeeeAddress { get; set; }
 
-        [JsonPropertyName("friendly_name")]
-        public string? FriendlyName { get; set;  }
+    [JsonPropertyName("friendly_name")]
+    public string? FriendlyName { get; set;  }
 
-        public BridgeDeviceDefinition? Definition { get; set; }
-    }
+    public BridgeDeviceDefinition? Definition { get; set; }
 }

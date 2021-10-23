@@ -3,10 +3,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Processes;
 
-namespace Signal.Beacon.Core.Signal
+namespace Signal.Beacon.Core.Signal;
+
+public interface ISignalProcessesClient : ISignalFeatureClient
 {
-    public interface ISignalProcessesClient : ISignalFeatureClient
-    {
-        Task<IEnumerable<Process>> GetProcessesAsync(CancellationToken cancellationToken);
-    }
+    Task<IEnumerable<Process>> GetProcessesAsync(CancellationToken cancellationToken);
 }

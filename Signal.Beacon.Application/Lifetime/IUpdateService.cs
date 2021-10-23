@@ -1,18 +1,17 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Application.Lifetime
+namespace Signal.Beacon.Application.Lifetime;
+
+public interface IUpdateService
 {
-    public interface IUpdateService
-    {
-        Task ShutdownSystemAsync();
+    Task ShutdownSystemAsync();
 
-        Task RestartStationAsync();
+    Task RestartStationAsync();
 
-        Task RestartSystemAsync();
+    Task RestartSystemAsync();
 
-        Task UpdateSystemAsync(CancellationToken cancellationToken);
+    Task UpdateSystemAsync(CancellationToken cancellationToken);
 
-        Task BeginUpdateAsync(CancellationToken cancellationToken);
-    }
+    Task BeginUpdateAsync(CancellationToken cancellationToken);
 }

@@ -3,12 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Network;
 
-namespace Signal.Beacon.Application.Mqtt
+namespace Signal.Beacon.Application.Mqtt;
+
+public interface IMqttDiscoveryService
 {
-    public interface IMqttDiscoveryService
-    {
-        Task<IEnumerable<IHostInfo>> DiscoverMqttBrokerHostsAsync(
-            string expectedTopic,
-            CancellationToken cancellationToken);
-    }
+    Task<IEnumerable<IHostInfo>> DiscoverMqttBrokerHostsAsync(
+        string expectedTopic,
+        CancellationToken cancellationToken);
 }

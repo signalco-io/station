@@ -1,10 +1,9 @@
-namespace Signal.Beacon.Core.Conditions
+namespace Signal.Beacon.Core.Conditions;
+
+public enum ConditionValueOperation
 {
-    public enum ConditionValueOperation
-    {
-        Equal,
-        EqualOrNull,
-        GreaterThan,
-        LessThan
-    }
+    Equal,
+    EqualOrNull,
+    GreaterThan,
+    LessThan
 }

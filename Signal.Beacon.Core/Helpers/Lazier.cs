@@ -1,13 +1,12 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Signal.Beacon.Core.Helpers
+namespace Signal.Beacon.Core.Helpers;
+
+public class Lazier<T> : Lazy<T> where T : class
 {
-    public class Lazier<T> : Lazy<T> where T : class
+    public Lazier(IServiceProvider provider)
+        : base(provider.GetRequiredService<T>)
     {
-        public Lazier(IServiceProvider provider)
-            : base(provider.GetRequiredService<T>)
-        {
-        }
     }
 }

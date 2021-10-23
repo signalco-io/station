@@ -1,13 +1,12 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Signal.Beacon.Core.Workers;
 
-namespace Signal.Beacon.Channel.iRobot
+namespace Signal.Beacon.Channel.iRobot;
+
+public static class iRobotServiceCollectionExtensions
 {
-    public static class iRobotServiceCollectionExtensions
+    public static IServiceCollection AddIRobot(this IServiceCollection services)
     {
-        public static IServiceCollection AddIRobot(this IServiceCollection services)
-        {
-            return services.AddSingleton<IWorkerService, iRobotWorkerService>();
-        }
+        return services.AddSingleton<IWorkerService, iRobotWorkerService>();
     }
 }

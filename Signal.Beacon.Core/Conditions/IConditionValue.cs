@@ -1,6 +1,5 @@
-namespace Signal.Beacon.Core.Conditions
+namespace Signal.Beacon.Core.Conditions;
+
+public interface IConditionValue
 {
-    public interface IConditionValue
-    {
-    }
 }

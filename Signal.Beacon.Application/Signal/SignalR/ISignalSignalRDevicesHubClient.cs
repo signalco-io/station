@@ -2,10 +2,9 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Application.Signal.SignalR
+namespace Signal.Beacon.Application.Signal.SignalR;
+
+public interface ISignalSignalRDevicesHubClient : ISignalSignalRHubClient
 {
-    public interface ISignalSignalRDevicesHubClient : ISignalSignalRHubClient
-    {
-        Task OnDeviceStateAsync(Func<SignalDeviceStatePublishDto, CancellationToken, Task> handler, CancellationToken cancellationToken);
-    }
+    Task OnDeviceStateAsync(Func<SignalDeviceStatePublishDto, CancellationToken, Task> handler, CancellationToken cancellationToken);
 }

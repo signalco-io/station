@@ -1,8 +1,7 @@
 using Signal.Beacon.Core.Workers;
 
-namespace Signal.Beacon.Application.Processing
+namespace Signal.Beacon.Application.Processing;
+
+public interface IProcessor : IWorkerService
 {
-    public interface IProcessor : IWorkerService
-    {
-    }
 }

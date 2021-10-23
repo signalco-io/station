@@ -1,10 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Signal.Beacon.Core.Conditions
+namespace Signal.Beacon.Core.Conditions;
+
+public interface IConditionEvaluatorValueProvider
 {
-    public interface IConditionEvaluatorValueProvider
-    {
-        Task<object?> GetValueAsync(IConditionValue conditionValue, CancellationToken cancellationToken);
-    }
+    Task<object?> GetValueAsync(IConditionValue conditionValue, CancellationToken cancellationToken);
 }

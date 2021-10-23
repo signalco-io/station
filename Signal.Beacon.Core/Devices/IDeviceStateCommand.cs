@@ -1,9 +1,8 @@
 using Signal.Beacon.Core.Architecture;
 
-namespace Signal.Beacon.Core.Devices
+namespace Signal.Beacon.Core.Devices;
+
+public interface IDeviceStateCommand : ICommand
 {
-    public interface IDeviceStateCommand : ICommand
-    {
-        DeviceTarget Target { get; }
-    }
+    DeviceTarget Target { get; }
 }

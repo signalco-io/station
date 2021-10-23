@@ -1,23 +1,22 @@
 ﻿using System;
 using Q42.HueApi.Interfaces;
 
-namespace Signal.Beacon.Channel.PhilipsHue
+namespace Signal.Beacon.Channel.PhilipsHue;
+
+internal class BridgeConnection
 {
-    internal class BridgeConnection
+    public BridgeConnection(BridgeConfig config, ILocalHueClient localClient)
     {
-        public BridgeConnection(BridgeConfig config, ILocalHueClient localClient)
-        {
-            this.Config = config;
-            this.LocalClient = localClient;
-        }
+        this.Config = config;
+        this.LocalClient = localClient;
+    }
 
-        public BridgeConfig Config { get; }
+    public BridgeConfig Config { get; }
 
-        public ILocalHueClient LocalClient { get; private set; }
+    public ILocalHueClient LocalClient { get; private set; }
 
-        public void AssignNewClient(ILocalHueClient client)
-        {
-            this.LocalClient = client ?? throw new ArgumentNullException(nameof(client));
-        }
+    public void AssignNewClient(ILocalHueClient client)
+    {
+        this.LocalClient = client ?? throw new ArgumentNullException(nameof(client));
     }
 }

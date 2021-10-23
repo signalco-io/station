@@ -2,22 +2,21 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace Signal.Beacon.Channel.Signal
+namespace Signal.Beacon.Channel.Signal;
+
+[Serializable]
+internal class SignalSensorTelemetryDto
 {
+    [JsonPropertyName("contacts")]
+    public IEnumerable<ValueDto>? Contacts { get; set; }
+
     [Serializable]
-    internal class SignalSensorTelemetryDto
+    public class ValueDto
     {
-        [JsonPropertyName("contacts")]
-        public IEnumerable<ValueDto>? Contacts { get; set; }
+        [JsonPropertyName("contact")]
+        public string? ContactName { get; set; }
 
-        [Serializable]
-        public class ValueDto
-        {
-            [JsonPropertyName("contact")]
-            public string? ContactName { get; set; }
-
-            [JsonPropertyName("value")]
-            public object? Value { get; set; }
-        }
+        [JsonPropertyName("value")]
+        public object? Value { get; set; }
     }
 }

@@ -1,6 +1,5 @@
-namespace Signal.Beacon.Core.Architecture
+namespace Signal.Beacon.Core.Architecture;
+
+public interface ICommand
 {
-    public interface ICommand
-    {
-    }
 }

@@ -1,15 +1,14 @@
 ﻿using System.Collections.Generic;
 
-namespace Signal.Beacon.Core.Network
+namespace Signal.Beacon.Core.Network;
+
+public interface IHostInfo
 {
-    public interface IHostInfo
-    {
-        string IpAddress { get; }
+    string IpAddress { get; }
 
-        long Ping { get; }
+    long Ping { get; }
 
-        IEnumerable<int> OpenPorts { get; }
+    IEnumerable<int> OpenPorts { get; }
 
-        string? PhysicalAddress { get; init; }
-    }
+    string? PhysicalAddress { get; init; }
 }

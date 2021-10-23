@@ -1,7 +1,6 @@
-﻿namespace Signal.Beacon.Channel.PhilipsHue
+﻿namespace Signal.Beacon.Channel.PhilipsHue;
+
+internal static class PhilipsHueChannels
 {
-    internal static class PhilipsHueChannels
-    {
-        public const string DeviceChannel = "philipshue";
-    }
+    public const string DeviceChannel = "philipshue";
 }

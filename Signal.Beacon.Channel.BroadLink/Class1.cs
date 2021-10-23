@@ -1,8 +1,7 @@
 ﻿using System;
 
-namespace Signal.Beacon.Channel.BroadLink
+namespace Signal.Beacon.Channel.BroadLink;
+
+public class Class1
 {
-    public class Class1
-    {
-    }
 }
