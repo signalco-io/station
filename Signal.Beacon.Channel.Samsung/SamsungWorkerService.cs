@@ -122,10 +122,12 @@ internal class SamsungWorkerService : IWorkerService, IWorkerServiceWithDiscover
 
     private async Task DiscoverDevices(CancellationToken cancellationToken)
     {
-        this.logger.LogInformation("Samsung discovering devices...");
+        this.logger.LogInformation("Samsung discovering hosts...");
 
         var ipAddressesInRange = IpHelper.GetIPAddressesInRange(IpHelper.GetLocalIp());
         var matchedHosts = await this.hostInfoService.HostsAsync(ipAddressesInRange, new[] {8001}, cancellationToken);
+
+        this.logger.LogInformation("Samsung matching hosts...");
         foreach (var hostInfo in matchedHosts)
         {
             // Ignore if no open ports
@@ -159,6 +161,8 @@ internal class SamsungWorkerService : IWorkerService, IWorkerServiceWithDiscover
             this.configuration?.TvRemotes.Add(newTvRemoteConfig);
             this.ConnectTv(newTvRemoteConfig);
         }
+
+        this.logger.LogInformation("Samsung discovering done");
     }
 
     private void ConnectTv(SamsungWorkerServiceConfiguration.SamsungTvRemoteConfig remoteConfig)

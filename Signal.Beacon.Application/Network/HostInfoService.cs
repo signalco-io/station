@@ -27,24 +27,25 @@ public class HostInfoService : IHostInfoService
         int[] scanPorts,
         CancellationToken cancellationToken)
     {
-        var arpResult = await ArpLookupAsync();
-        var pingResults = await Task
-            .WhenAll(ipAddresses.Select(async address =>
-            {
-                var arpLookupResult = arpResult.FirstOrDefault(a => a.ip == address);
-                var hostInfo = await this.GetHostInformationAsync(
-                    address,
-                    scanPorts,
-                    arpLookupResult.physical,
-                    cancellationToken);
+        var arpResult = (await ArpLookupAsync()).ToList();
+        var pingResults = new List<IHostInfo>();
+        foreach (var ipAddress in ipAddresses)
+        {
+            var arpLookupResult = arpResult.FirstOrDefault(a => a.ip == ipAddress);
+            var hostInfo = await this.GetHostInformationAsync(
+                ipAddress,
+                scanPorts,
+                arpLookupResult.physical,
+                cancellationToken);
 
-                if (hostInfo != null)
-                    this.logger.LogDebug("Host: {@Host}", hostInfo);
+            // Ignore if info not retrieved
+            if (hostInfo == null) 
+                continue;
 
-                return hostInfo;
-            }))
-            .ConfigureAwait(false);
-        return pingResults.Where(i => i != null).Select(i => i!).ToList();
+            this.logger.LogDebug("Host: {@Host}", hostInfo);
+            pingResults.Add(hostInfo);
+        }
+        return pingResults.Select(i => i!).ToList();
     }
 
     private async Task<string?> ResolveHostNameAsync(string ipAddress)
