@@ -389,6 +389,7 @@ internal class TvRemote : IDisposable
         }
         catch (Exception ex)
         {
+            this.logger.LogDebug("Remote message: {Message}", message.Text);
             this.logger.LogWarning(ex, "Failed to handle remote message.");
         }
     }
