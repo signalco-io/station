@@ -162,6 +162,16 @@ internal class MiFloraWorkerService : IWorkerService
             this.logger.LogTrace(ex, "Failed to stop discovery");
             this.logger.LogDebug("Failed to stop discovery");
         }
+
+        try
+        {
+            this.adapter?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            this.logger.LogTrace(ex, "Failed to dispose BT adapter");
+            this.logger.LogDebug("Failed to dispose BT adapter");
+        }
     }
 
     private async Task ProcessDevicesAsync(CancellationToken cancellationToken)
