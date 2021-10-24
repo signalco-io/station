@@ -281,7 +281,11 @@ internal class MiFloraWorkerService : IWorkerService
             try
             {
                 // Try to connect
-                await btDevice.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+                var isConnected = await btDevice.GetConnectedAsync();
+                if (!isConnected)
+                {
+                    await btDevice.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(60), cancellationToken);
+                }
             }
             catch (Exception ex)
             {
