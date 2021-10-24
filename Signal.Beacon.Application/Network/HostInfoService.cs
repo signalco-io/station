@@ -27,6 +27,8 @@ public class HostInfoService : IHostInfoService
         int[] scanPorts,
         CancellationToken cancellationToken)
     {
+        this.logger.LogDebug("Hosts scanning initiated...");
+
         var arpResult = (await ArpLookupAsync()).ToList();
         var pingResults = new List<IHostInfo>();
         foreach (var ipAddress in ipAddresses)
@@ -42,10 +44,13 @@ public class HostInfoService : IHostInfoService
             if (hostInfo == null) 
                 continue;
 
-            this.logger.LogDebug("Host: {@Host}", hostInfo);
             pingResults.Add(hostInfo);
         }
-        return pingResults.Select(i => i!).ToList();
+
+        this.logger.LogDebug("Alive hosts found: {HostCount}", pingResults.Count);
+        this.logger.LogDebug("Alive hosts: {@Host}", pingResults);
+
+        return pingResults;
     }
 
     private async Task<string?> ResolveHostNameAsync(string ipAddress)
