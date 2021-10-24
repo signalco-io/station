@@ -54,7 +54,7 @@ fi
 
 # Install prerequesites
 echo "Installing dependencies..."
-sudo apt-get install -y make g++ gcc bluez jq mosquitto
+sudo apt-get install -y make g++ gcc bluez jq mosquitto net-tools
 
 ## TODO: Apply BT Fix: https://askubuntu.com/a/1166847
 
