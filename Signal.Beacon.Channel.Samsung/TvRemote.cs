@@ -208,7 +208,7 @@ internal class TvRemote : IDisposable
                 if (status?.Running ?? false)
                     return app.Value;
             }
-            catch (HttpRequestException)
+            catch (Exception ex) when (ex is TaskCanceledException or HttpRequestException)
             {
                 this.logger.LogDebug("TV is offline. Can't get running application status");
                 return null;
