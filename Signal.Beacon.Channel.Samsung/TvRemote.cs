@@ -208,13 +208,18 @@ internal class TvRemote : IDisposable
                 if (status?.Running ?? false)
                     return app.Value;
             }
+            catch (HttpRequestException)
+            {
+                this.logger.LogDebug("TV is offline. Can't get running application status");
+                return null;
+            }
             catch (Exception ex)
             {
-                this.logger.LogDebug(ex, "Failed to get application {AppId} status.", app.Value);
+                this.logger.LogDebug(ex, "Failed to get application {AppId} status", app.Value);
             }
         }
 
-        return string.Empty;
+        return "Unknown";
     }
 
     private async Task GetBasicInfoAsync()
