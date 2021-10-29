@@ -118,7 +118,8 @@ internal abstract class SignalSignalRHubHubClient
         }
         catch (Exception ex)
         {
-            this.logger.LogWarning(ex, $"Failed to start Signal SignalR {hubName} hub");
+            this.logger.LogTrace(ex, "Failed to start SignalR connection for hub {HubName}", hubName);
+            this.logger.LogWarning("Failed to start Signal SignalR {HubName} hub", hubName);
 
             await this.ReconnectDelayedAsync(hubName, cancellationToken);
         }
@@ -127,6 +128,18 @@ internal abstract class SignalSignalRHubHubClient
     private async Task ReconnectDelayedAsync(string hubName, CancellationToken cancellationToken)
     {
         this.isStarted = false;
+
+        try
+        {
+            if (this.connection != null)
+                await this.connection.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            this.logger.LogTrace(ex, "Failed to dispose SignalR connection");
+            this.logger.LogDebug("Failed to dispose SignalR connection");
+        }
+
         await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
         _ = this.StartAsync(hubName, cancellationToken);
     }
