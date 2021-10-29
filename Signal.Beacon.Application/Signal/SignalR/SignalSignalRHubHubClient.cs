@@ -104,17 +104,17 @@ internal abstract class SignalSignalRHubHubClient
                 await this.ReconnectDelayedAsync(hubName, cancellationToken);
             };
 
-            // Start the connection
-            await this.connection.StartAsync(this.StartCancellationToken.Value);
-
-            this.logger.LogInformation("{HubName} hub started", hubName);
-
             // Reassign actions
             foreach (var (actionName, actionFunc) in actions)
             {
                 this.connection.On(actionName, actionFunc);
                 this.logger.LogDebug("{HubName} re-assigned action {ActionName}", hubName, actionName);
             }
+
+            // Start the connection
+            await this.connection.StartAsync(this.StartCancellationToken.Value);
+
+            this.logger.LogInformation("{HubName} hub started", hubName);
         }
         catch (Exception ex)
         {
