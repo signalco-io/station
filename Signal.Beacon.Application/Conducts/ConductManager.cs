@@ -37,17 +37,19 @@ internal class ConductManager : IConductManager, ICommandHandler<ConductPublishC
     public async Task HandleAsync(ConductPublishCommand command, CancellationToken cancellationToken) => 
         await this.PublishAsync(command.Conducts, cancellationToken);
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        await this.signalRConductsHubClient.OnConductRequestAsync(
+        this.signalRConductsHubClient.OnConductRequest(
             (req, token) => this.ConductRequestedMultipleHandlerAsync(new []{req}, token),
             cancellationToken);
 
-        await this.signalRConductsHubClient.OnConductRequestMultipleAsync(
+        this.signalRConductsHubClient.OnConductRequestMultiple(
             this.ConductRequestedMultipleHandlerAsync,
             cancellationToken);
 
-        _ = Task.Run(() => this.DelayedConductsLoop(cancellationToken), cancellationToken);
+        _ = Task.Run(async () => await this.DelayedConductsLoop(cancellationToken), cancellationToken);
+
+        return Task.CompletedTask;
     }
 
     private async Task ConductRequestedMultipleHandlerAsync(IEnumerable<ConductRequestDto> requests, CancellationToken cancellationToken)

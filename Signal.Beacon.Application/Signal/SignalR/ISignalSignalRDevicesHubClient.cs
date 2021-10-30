@@ -6,5 +6,5 @@ namespace Signal.Beacon.Application.Signal.SignalR;
 
 public interface ISignalSignalRDevicesHubClient : ISignalSignalRHubClient
 {
-    Task OnDeviceStateAsync(Func<SignalDeviceStatePublishDto, CancellationToken, Task> handler, CancellationToken cancellationToken);
+    void OnDeviceState(Func<SignalDeviceStatePublishDto, CancellationToken, Task> handler, CancellationToken cancellationToken);
 }

@@ -27,12 +27,18 @@ internal abstract class SignalSignalRHubHubClient
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected async Task OnAsync<T>(string targetName, Func<T, Task> arg, CancellationToken cancellationToken)
+    protected void On<T>(string targetName, Func<T, Task> arg, CancellationToken cancellationToken)
     {
-        await this.StartAsync(cancellationToken);
+        // Check if we already started the connection, if not don't assign immediately
+        if (this.isStarted && 
+            this.connection is {State: HubConnectionState.Connected})
+        {
+            this.logger.LogDebug("Hub assigned immediate action {ActionName}", targetName);
+            this.connection.On(targetName, arg);
+        }
+
         this.actions.TryAdd(targetName, o => arg((T)o));
-        this.connection.On(targetName, arg);
-        this.logger.LogDebug("Hub assigned action {ActionName}", targetName);
+        this.logger.LogDebug("Hub assigned on-start action {ActionName}", targetName);
     }
 
     public abstract Task StartAsync(CancellationToken cancellationToken);
@@ -61,7 +67,7 @@ internal abstract class SignalSignalRHubHubClient
         {
             this.connection = new HubConnectionBuilder()
                 .AddJsonProtocol()
-                .WithUrl($"https://signal-api.azurewebsites.net/api/signalr/{hubName}", options =>
+                .WithUrl($"https://api.signalco.io/api/signalr/{hubName}", options =>
                 {
                     options.AccessTokenProvider = async () =>
                     {
@@ -104,17 +110,18 @@ internal abstract class SignalSignalRHubHubClient
                 await this.ReconnectDelayedAsync(hubName, cancellationToken);
             };
 
+
+            // Start the connection
+            await this.connection.StartAsync(this.StartCancellationToken.Value);
+
+            this.logger.LogInformation("{HubName} hub started", hubName);
+
             // Reassign actions
             foreach (var (actionName, actionFunc) in actions)
             {
                 this.connection.On(actionName, actionFunc);
                 this.logger.LogDebug("{HubName} re-assigned action {ActionName}", hubName, actionName);
             }
-
-            // Start the connection
-            await this.connection.StartAsync(this.StartCancellationToken.Value);
-
-            this.logger.LogInformation("{HubName} hub started", hubName);
         }
         catch (Exception ex)
         {

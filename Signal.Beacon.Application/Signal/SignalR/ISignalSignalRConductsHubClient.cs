@@ -7,9 +7,9 @@ namespace Signal.Beacon.Application.Signal.SignalR;
 
 public interface ISignalSignalRConductsHubClient : ISignalSignalRHubClient
 {
-    Task OnConductRequestAsync(Func<ConductRequestDto, CancellationToken, Task> handler, CancellationToken cancellationToken);
+    void OnConductRequest(Func<ConductRequestDto, CancellationToken, Task> handler, CancellationToken cancellationToken);
 
-    Task OnConductRequestMultipleAsync(
+    void OnConductRequestMultiple(
         Func<IEnumerable<ConductRequestDto>, CancellationToken, Task> handler,
         CancellationToken cancellationToken);
 }

@@ -23,9 +23,9 @@ internal class SignalSignalRConductsHubClient : SignalSignalRHubHubClient, ISign
     public override Task StartAsync(CancellationToken cancellationToken) => 
         this.StartAsync("conducts", cancellationToken);
 
-    public async Task OnConductRequestMultipleAsync(Func<IEnumerable<ConductRequestDto>, CancellationToken, Task> handler, CancellationToken cancellationToken)
+    public void OnConductRequestMultiple(Func<IEnumerable<ConductRequestDto>, CancellationToken, Task> handler, CancellationToken cancellationToken)
     {
-        await this.OnAsync<string>("requested-multiple", async payload =>
+        this.On<string>("requested-multiple", async payload =>
         {
             var requests = JsonSerializer.Deserialize<List<ConductRequestDto>>(payload);
             if (requests == null)
@@ -51,9 +51,9 @@ internal class SignalSignalRConductsHubClient : SignalSignalRHubHubClient, ISign
         }, cancellationToken);
     }
 
-    public async Task OnConductRequestAsync(Func<ConductRequestDto, CancellationToken, Task> handler, CancellationToken cancellationToken)
+    public void OnConductRequest(Func<ConductRequestDto, CancellationToken, Task> handler, CancellationToken cancellationToken)
     {
-        await this.OnAsync<string>("requested", async payload =>
+        this.On<string>("requested", async payload =>
         {
             var request = JsonSerializer.Deserialize<ConductRequestDto>(payload);
             if (request == null)

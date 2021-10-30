@@ -17,6 +17,6 @@ internal class SignalSignalRDevicesHubClient : SignalSignalRHubHubClient, ISigna
     public override Task StartAsync(CancellationToken cancellationToken) => 
         this.StartAsync("devices", cancellationToken);
 
-    public Task OnDeviceStateAsync(Func<SignalDeviceStatePublishDto, CancellationToken, Task> handler, CancellationToken cancellationToken) => 
-        this.OnAsync<SignalDeviceStatePublishDto>("devicestate", async state => await handler(state, cancellationToken), cancellationToken);
+    public void OnDeviceState(Func<SignalDeviceStatePublishDto, CancellationToken, Task> handler, CancellationToken cancellationToken) => 
+        this.On<SignalDeviceStatePublishDto>("devicestate", async state => await handler(state, cancellationToken), cancellationToken);
 }
