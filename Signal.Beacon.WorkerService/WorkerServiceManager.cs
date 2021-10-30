@@ -34,7 +34,6 @@ public class WorkerServiceManager : IWorkerServiceManager
         await Task.WhenAll(this.workerServices.Value.Select(async ws =>
         {
             await this.StartWorkerServiceAsync(ws, cancellationToken);
-            this.runningWorkers.Add(ws);
         }));
         this.logger.LogInformation("All worker services started.");
     }
@@ -44,7 +43,6 @@ public class WorkerServiceManager : IWorkerServiceManager
         await Task.WhenAll(this.workerServices.Value.Select(async ws =>
         {
             await this.StopWorkerServiceAsync(ws);
-            this.runningWorkers.Remove(ws);
         }));
     }
 
@@ -57,9 +55,13 @@ public class WorkerServiceManager : IWorkerServiceManager
                 this.logger.LogInformation("Starting {WorkerServiceName}...", workerService.GetType().Name);
                 await workerService.StartAsync(stoppingToken);
 
+                this.runningWorkers.Add(workerService);
+
                 OnChange?.Invoke(
                     this,
                     new WorkerServiceManagerStateChangeEventArgs(workerService, WorkerServiceState.Running));
+
+                this.logger.LogInformation("{WorkerServiceName} started", workerService.GetType().Name);
             }
             catch (Exception ex)
             {
@@ -78,9 +80,13 @@ public class WorkerServiceManager : IWorkerServiceManager
                 this.logger.LogInformation("Stopping {WorkerServiceName}...", workerService.GetType().Name);
                 await workerService.StopAsync(CancellationToken.None);
 
+                this.runningWorkers.Remove(workerService);
+
                 OnChange?.Invoke(
                     this,
                     new WorkerServiceManagerStateChangeEventArgs(workerService, WorkerServiceState.Stopped));
+
+                this.logger.LogInformation("{WorkerServiceName} stopped", workerService.GetType().Name);
             }
             catch (Exception ex)
             {
