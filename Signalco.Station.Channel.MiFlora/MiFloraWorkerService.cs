@@ -28,7 +28,7 @@ internal class MiFloraWorkerService : IWorkerService
     private readonly List<string> ignoredDevices = new();
     private bool didApplyFirmwareFix;
 
-    private readonly CancellationTokenSource cts = new();
+    private CancellationTokenSource cts = new();
     private CancellationToken WorkerCancellationToken => this.cts.Token;
 
     public MiFloraWorkerService(
@@ -52,6 +52,8 @@ internal class MiFloraWorkerService : IWorkerService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        this.cts = new CancellationTokenSource();
+
         _ = Task.Run(() => this.PoolDevicesLoop(this.WorkerCancellationToken), cancellationToken);
 
         return Task.CompletedTask;
