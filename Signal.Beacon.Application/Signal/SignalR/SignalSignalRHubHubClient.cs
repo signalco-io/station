@@ -17,7 +17,7 @@ internal abstract class SignalSignalRHubHubClient
     private HubConnection? connection;
     private readonly object startLock = new();
     private bool isStarted;
-    private Dictionary<string, Func<object, Task>> actions = new();
+    private readonly Dictionary<string, (Type argType, Func<object[], Task> action)> actions = new();
 
     protected SignalSignalRHubHubClient(
         ISignalClientAuthFlow signalClientAuthFlow,
@@ -37,7 +37,7 @@ internal abstract class SignalSignalRHubHubClient
             this.connection.On(targetName, arg);
         }
 
-        this.actions.TryAdd(targetName, o => arg((T)o));
+        this.actions.TryAdd(targetName, (typeof(T), objects => arg((T)objects[0])));
         this.logger.LogDebug("Hub assigned on-start action {ActionName}", targetName);
     }
 
@@ -110,7 +110,6 @@ internal abstract class SignalSignalRHubHubClient
                 await this.ReconnectDelayedAsync(hubName, cancellationToken);
             };
 
-
             // Start the connection
             await this.connection.StartAsync(this.StartCancellationToken.Value);
 
@@ -119,7 +118,7 @@ internal abstract class SignalSignalRHubHubClient
             // Reassign actions
             foreach (var (actionName, actionFunc) in actions)
             {
-                this.connection.On(actionName, actionFunc);
+                this.connection.On(actionName, new[]{actionFunc.argType}, actionFunc.action);
                 this.logger.LogDebug("{HubName} re-assigned action {ActionName}", hubName, actionName);
             }
         }
