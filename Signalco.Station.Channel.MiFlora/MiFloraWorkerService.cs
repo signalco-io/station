@@ -28,6 +28,9 @@ internal class MiFloraWorkerService : IWorkerService
     private readonly List<string> ignoredDevices = new();
     private bool didApplyFirmwareFix;
 
+    private readonly CancellationTokenSource cts = new();
+    private CancellationToken WorkerCancellationToken => this.cts.Token;
+
     public MiFloraWorkerService(
         IDevicesDao devicesDao,
         ICommandHandler<DeviceDiscoveredCommand> deviceDiscoveryHandler,
@@ -49,7 +52,7 @@ internal class MiFloraWorkerService : IWorkerService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _ = Task.Run(() => this.PoolDevicesLoop(cancellationToken), cancellationToken);
+        _ = Task.Run(() => this.PoolDevicesLoop(this.WorkerCancellationToken), cancellationToken);
 
         return Task.CompletedTask;
     }
@@ -399,7 +402,17 @@ internal class MiFloraWorkerService : IWorkerService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        this.adapter?.Dispose();
+        try
+        {
+            this.adapter?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            this.logger.LogTrace(ex, "Failed to dispose BT adapter");
+            this.logger.LogDebug("Failed to dispose BT adapter");
+        }
+
+        this.cts.Cancel();
 
         return Task.CompletedTask;
     }
