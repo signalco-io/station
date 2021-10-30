@@ -16,24 +16,24 @@ public class Worker : BackgroundService
 {
     private readonly ISignalBeaconClient signalClient;
     private readonly ISignalClientAuthFlow signalClientAuthFlow;
-    private readonly IStationStateService stationStateService;
     private readonly IConfigurationService configurationService;
     private readonly IWorkerServiceManager workerServiceManager;
+    private readonly IStationStateManager stationStateManager;
     private readonly ILogger<Worker> logger;
 
     public Worker(
         ISignalBeaconClient signalClient,
         ISignalClientAuthFlow signalClientAuthFlow,
-        IStationStateService stationStateService,
         IConfigurationService configurationService,
         IWorkerServiceManager workerServiceManager,
+        IStationStateManager stationStateManager,
         ILogger<Worker> logger)
     {
         this.signalClient = signalClient ?? throw new ArgumentNullException(nameof(signalClient));
         this.signalClientAuthFlow = signalClientAuthFlow ?? throw new ArgumentNullException(nameof(signalClientAuthFlow));
-        this.stationStateService = stationStateService ?? throw new ArgumentNullException(nameof(stationStateService));
         this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         this.workerServiceManager = workerServiceManager ?? throw new ArgumentNullException(nameof(workerServiceManager));
+        this.stationStateManager = stationStateManager;
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -88,13 +88,11 @@ public class Worker : BackgroundService
 
         this.signalClientAuthFlow.OnTokenRefreshed += this.SignalClientAuthFlowOnOnTokenRefreshed;
 
+        // Start state reporting
+        await this.stationStateManager.BeginMonitoringStateAsync(stoppingToken);
+
         // Start worker services
         await this.workerServiceManager.StartAllWorkerServicesAsync(stoppingToken);
-
-        // Report state to cloud
-        await this.signalClient.ReportAsync(
-            await this.stationStateService.GetAsync(stoppingToken),
-            stoppingToken);
 
         // Wait for cancellation token
         while (!stoppingToken.IsCancellationRequested)

@@ -15,6 +15,8 @@ public class WorkerServiceManager : IWorkerServiceManager
     private readonly Lazy<IEnumerable<IWorkerService>> workerServices;
     private readonly List<IWorkerService> runningWorkers = new();
 
+    public event EventHandler<IWorkerServiceManagerStateChangeEventArgs>? OnChange;
+
     public WorkerServiceManager(
         Lazy<IEnumerable<IWorkerService>> workerServices,
         ILogger<WorkerServiceManager> logger)
@@ -54,6 +56,10 @@ public class WorkerServiceManager : IWorkerServiceManager
             {
                 this.logger.LogInformation("Starting {WorkerServiceName}...", workerService.GetType().Name);
                 await workerService.StartAsync(stoppingToken);
+
+                OnChange?.Invoke(
+                    this,
+                    new WorkerServiceManagerStateChangeEventArgs(workerService, WorkerServiceState.Running));
             }
             catch (Exception ex)
             {
@@ -71,6 +77,10 @@ public class WorkerServiceManager : IWorkerServiceManager
             {
                 this.logger.LogInformation("Stopping {WorkerServiceName}...", workerService.GetType().Name);
                 await workerService.StopAsync(CancellationToken.None);
+
+                OnChange?.Invoke(
+                    this,
+                    new WorkerServiceManagerStateChangeEventArgs(workerService, WorkerServiceState.Stopped));
             }
             catch (Exception ex)
             {

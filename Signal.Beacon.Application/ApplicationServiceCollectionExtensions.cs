@@ -6,6 +6,7 @@ using Signal.Beacon.Application.Network;
 using Signal.Beacon.Application.Processing;
 using Signal.Beacon.Application.PubSub;
 using Signal.Beacon.Application.Shell;
+using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conditions;
 using Signal.Beacon.Core.Conducts;
@@ -35,6 +36,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IDevicesDao, DevicesDao>();
         services.AddSingleton<IProcessesDao, ProcessesDao>();
         services.AddSingleton<IDeviceStateManager, DeviceStateManager>();
+        services.AddSingleton<IStationStateManager, StationStateManager>();
                 
         services.AddTransient<IShellService, LinuxShellService>();
         services.AddTransient<IUpdateService, LinuxUpdateService>();

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ namespace Signal.Beacon.Application;
 
 public interface IWorkerServiceManager
 {
+    event EventHandler<IWorkerServiceManagerStateChangeEventArgs> OnChange;
     IEnumerable<IWorkerService> AvailableWorkerServices { get; }
     IEnumerable<IWorkerService> RunningWorkerServices { get; }
     Task StartAllWorkerServicesAsync(CancellationToken cancellationToken);
