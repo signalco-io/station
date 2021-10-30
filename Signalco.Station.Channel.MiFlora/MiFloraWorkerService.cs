@@ -87,7 +87,7 @@ internal class MiFloraWorkerService : IWorkerService
         try
         {
             this.logger.LogDebug("Retrieving BT adapter...");
-            var newAdapter = (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(30), cancellationToken))
+            var newAdapter = (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(60), cancellationToken))
                 .FirstOrDefault();
             if (newAdapter == null)
             {
