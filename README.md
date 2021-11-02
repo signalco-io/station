@@ -1,10 +1,24 @@
-# Signalco Station
+<p align="center">
+  <a href="#">
+    <img height="128" width="455" alt="signalco" src="https://raw.githubusercontent.com/signalco-io/station/main/docs/images/logo-ghtheme-128x455.png">
+  </a>
+</p>
+<h4 align="center">Automate your life.</h4>
+
+<p align="center">
+  <a href="#getting-started">Getting Started</a> •
+  <a href="#development-for-station">Development for Station</a>
+</p>
+
+## Getting Started
+
+Visit <a aria-label="Signalco learn" href="https://www.signalco.io/learn">https://www.signalco.io/learn</a> to get started with Signalco.
+
+## Development for Station
 
 [![CodeQL](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml)
 [![Create new release](https://github.com/signalco-io/station/actions/workflows/create-release.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/create-release.yml)
 [![Publish Binaries](https://github.com/signalco-io/station/actions/workflows/release-binaries.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/release-binaries.yml)
-
-## Development
 
 ### Commits
 
