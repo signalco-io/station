@@ -26,6 +26,7 @@ Code
 
 [![CodeQL](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml)
 [![Maintainability](https://api.codeclimate.com/v1/badges/61b2b1f79a40220b7054/maintainability)](https://codeclimate.com/github/signalco-io/station/maintainability)
+[![CodeFactor](https://www.codefactor.io/repository/github/signalco-io/station/badge)](https://www.codefactor.io/repository/github/signalco-io/station)
 
 ### Commits
 
