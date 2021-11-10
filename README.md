@@ -16,9 +16,16 @@ Visit <a aria-label="Signalco learn" href="https://www.signalco.io/learn">https:
 
 ## Development for Station
 
-[![CodeQL](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml)
+Deployments
+
 [![Create new release](https://github.com/signalco-io/station/actions/workflows/create-release.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/create-release.yml)
+
 [![Publish Binaries](https://github.com/signalco-io/station/actions/workflows/release-binaries.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/release-binaries.yml)
+
+Code
+
+[![CodeQL](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml)
+[![Maintainability](https://api.codeclimate.com/v1/badges/61b2b1f79a40220b7054/maintainability)](https://codeclimate.com/github/signalco-io/station/maintainability)
 
 ### Commits
 
