@@ -26,7 +26,6 @@ internal class MiFloraWorkerService : IWorkerService
     private Adapter? adapter;
     private readonly List<string> knownDevices = new();
     private readonly List<string> ignoredDevices = new();
-    private bool didApplyFirmwareFix;
 
     private CancellationTokenSource cts = new();
     private CancellationToken WorkerCancellationToken => this.cts.Token;
@@ -84,38 +83,38 @@ internal class MiFloraWorkerService : IWorkerService
         }
     }
 
-    private async Task AssignAdapterBtAsync(CancellationToken cancellationToken)
+    private async Task<Adapter?> DiscoverAvailableAdapterAsync(CancellationToken cancellationToken)
     {
         try
         {
             this.logger.LogDebug("Retrieving BT adapter...");
-            var newAdapter = (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(60), cancellationToken))
-                .FirstOrDefault();
-            if (newAdapter == null)
-            {
-                if (!this.didApplyFirmwareFix)
-                {
-                    this.didApplyFirmwareFix = true;
-                    await this.ApplyAdapterFirmwareFixAsync(cancellationToken);
-                    await this.AssignAdapterBtAsync(cancellationToken);
-                }
-
-                if (newAdapter == null)
-                    throw new Exception("No BT adapter available.");
-
-                this.logger.LogDebug("Using BT adapter: {AdapterName}", newAdapter.ObjectPath);
-            }
-
-            this.adapter = newAdapter;
+            return (await BlueZManager.GetAdaptersAsync().WaitAsync(TimeSpan.FromSeconds(60), cancellationToken))[0];
         }
         catch (Exception ex)
         {
-            this.adapter = null;
             this.logger.LogTrace(ex, "Failed to assign BT adapter.");
             this.logger.LogWarning("Failed to assign BT adapter.");
+
+            return null;
         }
     }
-        
+
+    private async Task AssignAdapterBtAsync(CancellationToken cancellationToken)
+    {
+        var newAdapter = await DiscoverAvailableAdapterAsync(cancellationToken);
+        if (newAdapter == null)
+        {
+            // Try again after fix
+            await this.ApplyAdapterFirmwareFixAsync(cancellationToken);
+            newAdapter = await DiscoverAvailableAdapterAsync(cancellationToken);
+            if (newAdapter == null)
+                throw new Exception("No BT adapter available.");
+        }
+
+        this.logger.LogDebug("Using BT adapter: {AdapterName}", newAdapter.ObjectPath);
+        this.adapter = newAdapter;
+    }
+
     private async Task BeginDiscoveryAsync(CancellationToken cancellationToken)
     {
         try
