@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Polly;
+using Polly.CircuitBreaker;
 using Signal.Beacon.Application.Auth;
 
 namespace Signal.Beacon.Application.Signal;
@@ -14,20 +16,28 @@ namespace Signal.Beacon.Application.Signal;
 internal class SignalClient : ISignalClient, ISignalClientAuthFlow
 {
     private const string SignalApiUrl = "https://api.signalco.io/api";
-    //private const string SignalApiUrl = "http://localhost:7071";
 
     private static readonly string SignalApiBeaconRefreshTokenUrl = "/beacons/refresh-token";
 
     private readonly ILogger<SignalClient> logger;
     private readonly HttpClient client = new();
     private AuthToken? token;
-    private SemaphoreSlim renewLock = new(1, 1);
+    private readonly SemaphoreSlim renewLock = new(1, 1);
+    private readonly AsyncCircuitBreakerPolicy circuitBreakerPolicy;
 
     public event EventHandler<AuthToken?>? OnTokenRefreshed;
 
     public SignalClient(ILogger<SignalClient> logger)
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.circuitBreakerPolicy = Policy
+            .Handle<HttpRequestException>(ex =>
+                ex.StatusCode.HasValue && ((int) ex.StatusCode > 500 || ex.StatusCode == HttpStatusCode.RequestTimeout))
+            .AdvancedCircuitBreakerAsync(
+                failureThreshold: 0.5,
+                samplingDuration: TimeSpan.FromSeconds(10), 
+                minimumThroughput: 4,
+                durationOfBreak: TimeSpan.FromSeconds(30));
     }
 
 
@@ -89,52 +99,83 @@ internal class SignalClient : ISignalClient, ISignalClientAuthFlow
 
     public async Task PostAsJsonAsync<T>(string url, T data, CancellationToken cancellationToken)
     {
-        await this.RenewTokenIfExpiredAsync(cancellationToken);
+        await this.HandleHttpErrorsAsync<T>(async () =>
+        {
+            await this.RenewTokenIfExpiredAsync(cancellationToken);
 
-        using var response = await this.client.PostAsJsonAsync($"{SignalApiUrl}{url}", data, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            throw new Exception($"Signal API POST {SignalApiUrl}{url} failed. Reason: {await response.Content.ReadAsStringAsync(cancellationToken)} ({response.StatusCode})");
+            using var response = await this.circuitBreakerPolicy.ExecuteAsync(async () =>
+                await this.client.PostAsJsonAsync($"{SignalApiUrl}{url}", data, cancellationToken));
+            if (!response.IsSuccessStatusCode)
+                throw new Exception(
+                    $"Signal API POST {SignalApiUrl}{url} failed. Reason: {await response.Content.ReadAsStringAsync(cancellationToken)} ({response.StatusCode})");
+
+            return default;
+        });
     }
 
     public async Task<TResponse?> PostAsJsonAsync<TRequest, TResponse>(string url, TRequest data, CancellationToken cancellationToken, bool renewTokenIfExpired = true)
     {
-        if (renewTokenIfExpired)
-            await this.RenewTokenIfExpiredAsync(cancellationToken);
-
-        using var response = await this.client.PostAsJsonAsync($"{SignalApiUrl}{url}", data, cancellationToken);
-        if (response.IsSuccessStatusCode)
+        return await this.HandleHttpErrorsAsync(async () =>
         {
-            if (response.StatusCode == HttpStatusCode.NoContent)
-                throw new Exception($"API returned NOCONTENT but we expected response of type {typeof(TResponse).FullName}");
+            if (renewTokenIfExpired)
+                await this.RenewTokenIfExpiredAsync(cancellationToken);
 
-            try
+            using var response = await this.circuitBreakerPolicy.ExecuteAsync(async () =>
+                await this.client.PostAsJsonAsync($"{SignalApiUrl}{url}", data, cancellationToken));
+            if (response.IsSuccessStatusCode)
             {
-                var responseData = await response.Content.ReadFromJsonAsync<TResponse>(
-                    new JsonSerializerOptions {PropertyNameCaseInsensitive = true},
-                    cancellationToken);
-                return responseData;
-            }
-            catch (JsonException ex)
-            {
-                var responseDataString = await response.Content.ReadAsStringAsync(cancellationToken);
-                this.logger.LogTrace(ex, "Failed to read response JSON.");
-                this.logger.LogDebug("Reading response JSON failed. Raw: {DataString}", responseDataString);
-                throw;
-            }
-        }
+                if (response.StatusCode == HttpStatusCode.NoContent)
+                    throw new Exception(
+                        $"API returned NOCONTENT but we expected response of type {typeof(TResponse).FullName}");
 
-        var responseContent = await this.GetResponseContentStringAsync(response, cancellationToken);
-        throw new Exception($"Signal API POST {SignalApiUrl}{url} failed. Reason: {responseContent} ({response.StatusCode})");
+                try
+                {
+                    var responseData = await response.Content.ReadFromJsonAsync<TResponse>(
+                        new JsonSerializerOptions {PropertyNameCaseInsensitive = true},
+                        cancellationToken);
+                    return responseData;
+                }
+                catch (JsonException ex)
+                {
+                    var responseDataString = await response.Content.ReadAsStringAsync(cancellationToken);
+                    this.logger.LogTrace(ex, "Failed to read response JSON.");
+                    this.logger.LogDebug("Reading response JSON failed. Raw: {DataString}", responseDataString);
+                    throw;
+                }
+            }
+
+            var responseContent = await this.GetResponseContentStringAsync(response, cancellationToken);
+            throw new Exception(
+                $"Signal API POST {SignalApiUrl}{url} failed. Reason: {responseContent} ({response.StatusCode})");
+        });
     }
 
     public async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken)
     {
-        await this.RenewTokenIfExpiredAsync(cancellationToken);
+        return await this.HandleHttpErrorsAsync(async () =>
+        {
+            await this.RenewTokenIfExpiredAsync(cancellationToken);
 
-        return await this.client.GetFromJsonAsync<T>(
-            $"{SignalApiUrl}{url}", 
-            new JsonSerializerOptions {PropertyNameCaseInsensitive = true},
-            cancellationToken);
+            return await this.circuitBreakerPolicy.ExecuteAsync(async () =>
+                await this.client.GetFromJsonAsync<T>(
+                    $"{SignalApiUrl}{url}",
+                    new JsonSerializerOptions {PropertyNameCaseInsensitive = true},
+                    cancellationToken));
+        });
+    }
+
+    private async Task<T?> HandleHttpErrorsAsync<T>(Func<Task<T?>> func)
+    {
+        try
+        {
+            return await func();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+        {
+            this.logger.LogTrace(ex, "API unavailable");
+            this.logger.LogWarning("API unavailable");
+            return default;
+        }
     }
 
     private async Task<string> GetResponseContentStringAsync(
