@@ -53,7 +53,7 @@ dotnet publish -r win-x64 --self-contained true
 Example publish command for ARM64 (eg. >= Rpi3) target:
 
 ```bash
-dotnet publish -r amr64 --self-contained true
+dotnet publish -r linux-arm64 --self-contained true
 ```
 
 _[.NET Core RID Catalog](https://docs.microsoft.com/en-us/dotnet/core/rid-catalog) for more options for `-r` flag._
