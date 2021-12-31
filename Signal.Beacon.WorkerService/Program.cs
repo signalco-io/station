@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -21,15 +22,6 @@ public static class Program
 {
     public static void Main(string[] args)
     {
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-            .Enrich.FromLogContext()
-            .WriteTo.File("Logs/log.log", rollingInterval: RollingInterval.Day,
-                retainedFileTimeLimit: TimeSpan.FromDays(7))
-            .WriteTo.Console()
-            .CreateLogger();
-
         CreateHostBuilder(args).Build().Run();
     }
 
@@ -54,5 +46,19 @@ public static class Program
                 services.AddTransient(typeof(Lazy<>), typeof(Lazier<>));
                 services.AddSingleton<IWorkerServiceManager, WorkerServiceManager>();
             })
-            .UseSerilog();
+            .UseSerilog((context, provider, config) =>
+            {
+                config
+                    .MinimumLevel.Debug()
+                    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                    .Enrich.FromLogContext()
+                    .WriteTo.File(
+                        "Logs/log.log",
+                        rollingInterval: RollingInterval.Day,
+                        retainedFileTimeLimit: TimeSpan.FromDays(3))
+                    .WriteTo.Console()
+                    .WriteTo.SignalcoStationLogging(
+                        new Lazy<IStationStateService>(provider.GetRequiredService<IStationStateService>),
+                new Lazy<ISignalBeaconClient>(provider.GetRequiredService<ISignalBeaconClient>));
+            });
 }

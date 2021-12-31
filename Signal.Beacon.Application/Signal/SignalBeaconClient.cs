@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Signal.Beacon.Core.Signal;
 
 namespace Signal.Beacon.Application.Signal;
 
@@ -9,6 +12,7 @@ internal class SignalBeaconClient : ISignalBeaconClient
 {
     private const string SignalApiBeaconRegisterUrl = "/beacons/register";
     private const string SignalApiBeaconStateUrl = "/beacons/report-state";
+    private const string SignalApiStationLoggingPersistUrl = "/stations/logging/persist";
 
     private readonly ISignalClient client;
     private readonly ILogger<SignalBeaconClient> logger;
@@ -50,6 +54,26 @@ internal class SignalBeaconClient : ISignalBeaconClient
         {
             this.logger.LogWarning("Failed to report station state to cloud.");
             this.logger.LogTrace(ex, "Station state report failed.");
+        }
+    }
+
+    public async Task LogAsync(string stationId, IEnumerable<ISignalcoStationLoggingEntry> entries, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var payload = new SignalcoLoggingStationRequestDto(
+                stationId,
+                entries.Select(e => new SignalcoLoggingStationEntryDto(e.TimeStamp, e.Level, e.Message)).ToList());
+
+            await this.client.PostAsJsonAsync(
+                SignalApiStationLoggingPersistUrl,
+                payload,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            this.logger.LogDebug("Failed to log to cloud.");
+            this.logger.LogTrace(ex, "Station logging failed.");
         }
     }
 }
