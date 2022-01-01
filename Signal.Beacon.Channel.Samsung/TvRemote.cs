@@ -133,10 +133,17 @@ internal class TvRemote : IDisposable
 
             this.isReconnecting = false;
 
+            // If TV is not ON, try again after one period (10s)
+            if (!await this.CheckIsOnlineAsync())
+            {
+                ReconnectAfter(10000);
+                return;
+            }
+
             await this.RetrieveTvId();
             await this.ConnectWsRemoteAsync();
 
-            this.periodicalChecksTimer = new Timer(60000);
+            this.periodicalChecksTimer = new Timer(30000);
             this.periodicalChecksTimer.Elapsed += (_, _) => this.DoPeriodicalTasks();
             this.periodicalChecksTimer.Start();
         }
@@ -161,9 +168,8 @@ internal class TvRemote : IDisposable
             return;
 
         // Try to get power state
-        var basicInfo = await this.GetBasicInfoAsync();
-        if (basicInfo?.Device?.PowerState != null) 
-            this.ReportOnline(basicInfo.Device.PowerState == "on");
+        var isOnline = await this.CheckIsOnlineAsync();
+        this.ReportOnline(isOnline);
 
         if (this.isTvOn)
         {
@@ -233,6 +239,18 @@ internal class TvRemote : IDisposable
         }
 
         return "Unknown";
+    }
+
+    private async Task<bool> CheckIsOnlineAsync()
+    {
+        try
+        {
+            return (await this.GetBasicInfoAsync())?.Device?.PowerState == "on";
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task RetrieveTvId()
