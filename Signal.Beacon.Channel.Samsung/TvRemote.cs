@@ -29,9 +29,11 @@ internal class TvRemote : IDisposable
     private readonly ILogger logger;
     private bool isReconnecting;
     private TvBasicInfoApiV2ResponseDto? tvBasicInfo;
-    private bool isDiscovered;
     private CancellationToken cancellationToken;
     private Timer? periodicalChecksTimer;
+
+    private bool isDiscovered;
+    private bool isTvOn;
 
     private IWebsocketClient? client;
     private IDisposable? clientReconnectSubscription;
@@ -131,7 +133,7 @@ internal class TvRemote : IDisposable
 
             this.isReconnecting = false;
 
-            await this.GetBasicInfoAsync();
+            await this.RetrieveTvId();
             await this.ConnectWsRemoteAsync();
 
             this.periodicalChecksTimer = new Timer(60000);
@@ -158,22 +160,33 @@ internal class TvRemote : IDisposable
         if (!this.isDiscovered || this.Id == null)
             return;
 
-        var runningApp = await this.GetRunningAppAsync();
-        if (runningApp != null)
+        // Try to get power state
+        var basicInfo = await this.GetBasicInfoAsync();
+        if (basicInfo?.Device?.PowerState != null) 
+            this.ReportOnline(basicInfo.Device.PowerState == "on");
+
+        if (this.isTvOn)
         {
-            this.OnState?.Invoke(this, new DeviceStateSetCommand(
-                new DeviceTarget(SamsungChannels.SamsungChannel, this.Id, "runningApp"),
-                runningApp));
+            var runningApp = await this.GetRunningAppAsync();
+            if (runningApp != null)
+            {
+                this.OnState?.Invoke(this, new DeviceStateSetCommand(
+                    new DeviceTarget(SamsungChannels.SamsungChannel, this.Id, "runningApp"),
+                    runningApp));
+            }
         }
     }
 
     private void ReportOnline(bool isOnline)
     {
+        if (isOnline == this.isTvOn) return;
         if (this.Id is null) return;
 
         // Reset states
         if (!isOnline)
             this.isDiscovered = false;
+
+        this.isTvOn = isOnline;
 
         this.OnState?.Invoke(this, new DeviceStateSetCommand(
             new DeviceTarget(SamsungChannels.SamsungChannel, this.Id, "state"),
@@ -222,12 +235,18 @@ internal class TvRemote : IDisposable
         return "Unknown";
     }
 
-    private async Task GetBasicInfoAsync()
+    private async Task RetrieveTvId()
     {
-        this.tvBasicInfo = await new HttpClient().GetFromJsonAsync<TvBasicInfoApiV2ResponseDto>(
-            $"http://{this.configuration.IpAddress}:8001/api/v2/");
+        this.tvBasicInfo = await GetBasicInfoAsync();
         if (this.tvBasicInfo?.Device != null)
             this.configuration.Id = this.tvBasicInfo.Device.Id;
+    }
+
+    private Task<TvBasicInfoApiV2ResponseDto?> GetBasicInfoAsync()
+    {
+        return new HttpClient().GetFromJsonAsync<TvBasicInfoApiV2ResponseDto>(
+            $"http://{this.configuration.IpAddress}:8001/api/v2/", 
+            cancellationToken);
     }
 
     private void ReconnectAfter(double delayMs = 30000)
@@ -248,6 +267,9 @@ internal class TvRemote : IDisposable
     {
         try
         {
+            if (this.client?.IsStarted ?? false)
+                this.logger.LogDebug("Disconnecting Websocket for {TvIp}...", this.configuration.IpAddress);
+
             this.periodicalChecksTimer?.Stop();
             this.periodicalChecksTimer = null;
 
@@ -260,7 +282,8 @@ internal class TvRemote : IDisposable
                     this.clientMessageReceivedSubscription?.Dispose();
                     this.clientReconnectSubscription?.Dispose();
 
-                    await this.client.Stop(WebSocketCloseStatus.NormalClosure, "Disconnect initiated.");
+                    if (this.client.IsRunning)
+                        await this.client.Stop(WebSocketCloseStatus.NormalClosure, "Disconnect initiated.");
                 }
                 catch (Exception ex)
                 {
@@ -282,8 +305,6 @@ internal class TvRemote : IDisposable
         {
             this.logger.LogTrace("Received: {Message}", message.Text);
             var response = JsonSerializer.Deserialize<TvWsResponseDto>(message.Text);
-
-            this.ReportOnline(true);
 
             // Acquire token procedure
             if (!this.isDiscovered && response?.Data?.Token != null)
@@ -471,7 +492,7 @@ internal class TvRemote : IDisposable
     {
         public DeviceDto? Device { get; set; }
 
-        public record DeviceDto(string? Id, string? Name, string? ModelName);
+        public record DeviceDto(string? Id, string? Name, string? ModelName, string? PowerState);
     }
 
     public void Dispose()

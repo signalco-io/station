@@ -180,7 +180,9 @@ public class MqttClient : IMqttClient
             this.connectionFailedCounter = int.MinValue;
         }
 
-        this.logger.LogInformation(arg.Exception, "MQTT connection closed {ClientName}.", this.assignedClientName);
+        // Log connection closed only if connection was successfully established
+        this.logger.LogInformation(arg.Exception, "MQTT connection closed {ClientName}. Reason: {Reason}", this.assignedClientName, arg.Reason);
+
         return Task.CompletedTask;
     }
 
