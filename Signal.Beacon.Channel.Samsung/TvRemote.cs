@@ -34,6 +34,7 @@ internal class TvRemote : IDisposable
 
     private bool isDiscovered;
     private bool isTvOn;
+    private string? runningApp;
 
     private IWebsocketClient? client;
     private IDisposable? clientReconnectSubscription;
@@ -174,8 +175,9 @@ internal class TvRemote : IDisposable
         if (this.isTvOn)
         {
             var runningApp = await this.GetRunningAppAsync();
-            if (runningApp != null)
+            if (runningApp != null && runningApp != this.runningApp)
             {
+                this.runningApp = runningApp;
                 this.OnState?.Invoke(this, new DeviceStateSetCommand(
                     new DeviceTarget(SamsungChannels.SamsungChannel, this.Id, "runningApp"),
                     runningApp));
