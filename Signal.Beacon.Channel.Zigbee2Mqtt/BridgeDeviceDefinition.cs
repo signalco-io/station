@@ -8,5 +8,7 @@ internal class BridgeDeviceDefinition
 
     public string? Vendor { get; set; }
 
+    public string? Description { get; set; }
+
     public List<BridgeDeviceExposeFeature>? Exposes { get; set; }
 }

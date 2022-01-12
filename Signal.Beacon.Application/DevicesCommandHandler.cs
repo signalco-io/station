@@ -53,15 +53,16 @@ public class DevicesCommandHandler : IDevicesCommandHandler
             else
             {
                 // Update info if needed
-                if (command.Alias != device.Alias ||
-                    command.Manufacturer != device.Manufacturer ||
+                if (command.Manufacturer != device.Manufacturer ||
                     command.Model != device.Model)
                 {
-                    await this.signalClient.UpdateDeviceInfoAsync(deviceId, command, cancellationToken);
+                    var updatedCommand = command with {Alias = device.Alias};
+
+                    await this.signalClient.UpdateDeviceInfoAsync(deviceId, updatedCommand, cancellationToken);
 
                     this.logger.LogInformation(
                         "Updated device info: {DeviceAlias} ({DeviceIdentifier}).",
-                        command.Alias, command.Identifier);
+                        updatedCommand.Alias, updatedCommand.Identifier);
 
                     this.devicesDao.InvalidateDevice();
                 }

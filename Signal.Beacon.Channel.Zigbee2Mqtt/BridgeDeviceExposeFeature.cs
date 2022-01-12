@@ -10,6 +10,10 @@ internal class BridgeDeviceExposeFeature
 
     public string? Type { get; set; }
 
+    public string? Unit { get; set; }
+
+    public string? Description { get; set; }
+
     public List<BridgeDeviceExposeFeature>? Features { get; set; }
 
     public IEnumerable<string>? Values { get; set; }
