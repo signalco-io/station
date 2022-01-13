@@ -15,10 +15,7 @@ public class DeviceConfiguration
     public string Identifier { get; }
 
     public IEnumerable<DeviceEndpoint> Endpoints { get; }
-
-    public string? Model { get; set; }
-        
-    public string? Manufacturer { get; set; }
+    
 
     public DeviceConfiguration(string id, string alias, string identifier, IEnumerable<DeviceEndpoint>? endpoints = null)
     {

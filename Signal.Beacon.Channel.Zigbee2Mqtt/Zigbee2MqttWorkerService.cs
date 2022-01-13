@@ -25,7 +25,7 @@ internal class Zigbee2MqttWorkerService : IWorkerService
     private readonly IDevicesDao devicesDao;
     private readonly ICommandHandler<DeviceStateSetCommand> deviceSetStateHandler;
     private readonly ICommandHandler<DeviceDiscoveredCommand> deviceDiscoverHandler;
-    private readonly ICommandHandler<DeviceContactUpdateCommand> deviceContactUpdateHandler;
+    private readonly ICommandHandler<DeviceContactUpdateCommand> contactHandler;
     private readonly IConductSubscriberClient conductSubscriberClient;
     private readonly IMqttClientFactory mqttClientFactory;
     private readonly IMqttDiscoveryService mqttDiscoveryService;
@@ -53,7 +53,7 @@ internal class Zigbee2MqttWorkerService : IWorkerService
         this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
         this.deviceSetStateHandler = devicesService ?? throw new ArgumentNullException(nameof(devicesService));
         this.deviceDiscoverHandler = deviceDiscoverHandler ?? throw new ArgumentNullException(nameof(deviceDiscoverHandler));
-        this.deviceContactUpdateHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
+        this.contactHandler = deviceContactUpdateHandler ?? throw new ArgumentNullException(nameof(deviceContactUpdateHandler));
         this.conductSubscriberClient = conductSubscriberClient ?? throw new ArgumentNullException(nameof(conductSubscriberClient));
         this.mqttClientFactory = mqttClientFactory ?? throw new ArgumentNullException(nameof(mqttClientFactory));
         this.mqttDiscoveryService = mqttDiscoveryService ?? throw new ArgumentNullException(nameof(mqttDiscoveryService));
@@ -341,58 +341,87 @@ internal class Zigbee2MqttWorkerService : IWorkerService
         {
             this.logger.LogWarning("Failed to update device contacts because device with Identifier: {DeviceIdentifier} is not found.", deviceConfig.Identifier);
         }
-        else if (bridgeDevice.Definition is { Exposes: { } })
+        else
         {
-            foreach (var feature in bridgeDevice.Definition.Exposes.SelectMany(e =>
-                new List<BridgeDeviceExposeFeature>(e.Features ??
-                                                    Enumerable.Empty<BridgeDeviceExposeFeature>()) { e }))
+            // Set common contacts
+            if (bridgeDevice.Definition is not null)
             {
-                var name = feature.Property;
-                var type = feature.Type;
-
-                // Must have name and type
-                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(type))
-                    continue;
-
-                // Map zigbee2mqtt type to signal data type
-                var dataType = MapZ2MTypeToDataType(type);
-                if (string.IsNullOrWhiteSpace(dataType))
-                {
-                    this.logger.LogWarning(
-                        "Failed to map input {Input} type {Type} for device {DeviceIdentifier}",
-                        name, type, deviceConfig.Identifier);
-                    continue;
-                }
-
-                var access = DeviceContactAccess.None;
-                if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Readonly))
-                    access |= DeviceContactAccess.Read;
-                if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Request))
-                    access |= DeviceContactAccess.Get;
-                if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Write))
-                    access |= DeviceContactAccess.Write;
-
-                var dataValues = feature.Values?.ToList();
-
-                // Update contact basic information
-                await this.deviceContactUpdateHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
-                        device,
-                        Zigbee2MqttChannels.DeviceChannel,
-                        name,
-                        c =>
-                        {
-                            var existingDataValues = new List<DeviceContactDataValue>(c.DataValues ?? Enumerable.Empty<DeviceContactDataValue>());
-
-                            // Reassign old value labels
-                            var newDataValues = dataValues?.Select(dv =>
-                                                    new DeviceContactDataValue(dv,
-                                                        existingDataValues.FirstOrDefault(edv => edv.Value == dv)
-                                                            ?.Label)) ??
-                                                existingDataValues;
-
-                            return c with { DataType = dataType, Access = access, DataValues = newDataValues};
-                        }),
+                await this.contactHandler.HandleAsync(
+                    ContactCommands.Manufacturer(device, Zigbee2MqttChannels.DeviceChannel), cancellationToken);
+                await this.contactHandler.HandleAsync(ContactCommands.Model(device, Zigbee2MqttChannels.DeviceChannel),
                     cancellationToken);
+                await this.contactHandler.HandleAsync(ContactCommands.Online(device, Zigbee2MqttChannels.DeviceChannel),
+                    cancellationToken);
+
+                // Set manufacturer
+                await this.deviceSetStateHandler.HandleAsync(
+                    new DeviceStateSetCommand(
+                        new DeviceTarget(Zigbee2MqttChannels.DeviceChannel, deviceConfig.Identifier, "manufacturer"),
+                        bridgeDevice.Definition.Vendor), cancellationToken);
+
+                // Set model
+                await this.deviceSetStateHandler.HandleAsync(
+                    new DeviceStateSetCommand(
+                        new DeviceTarget(Zigbee2MqttChannels.DeviceChannel, deviceConfig.Identifier, "model"),
+                        bridgeDevice.Definition.Model), cancellationToken);
+            }
+
+            if (bridgeDevice.Definition is {Exposes: { }})
+            {
+                // Register exposed
+                foreach (var feature in bridgeDevice.Definition.Exposes.SelectMany(e =>
+                             new List<BridgeDeviceExposeFeature>(e.Features ??
+                                                                 Enumerable.Empty<BridgeDeviceExposeFeature>()) {e}))
+                {
+                    var name = feature.Property;
+                    var type = feature.Type;
+
+                    // Must have name and type
+                    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(type))
+                        continue;
+
+                    // Map zigbee2mqtt type to signal data type
+                    var dataType = MapZ2MTypeToDataType(type);
+                    if (string.IsNullOrWhiteSpace(dataType))
+                    {
+                        this.logger.LogWarning(
+                            "Failed to map input {Input} type {Type} for device {DeviceIdentifier}",
+                            name, type, deviceConfig.Identifier);
+                        continue;
+                    }
+
+                    var access = DeviceContactAccess.None;
+                    if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Readonly))
+                        access |= DeviceContactAccess.Read;
+                    if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Request))
+                        access |= DeviceContactAccess.Get;
+                    if (feature.Access.HasFlag(BridgeDeviceExposeFeatureAccess.Write))
+                        access |= DeviceContactAccess.Write;
+
+                    var dataValues = feature.Values?.ToList();
+
+                    // Update contact basic information
+                    await this.contactHandler.HandleAsync(DeviceContactUpdateCommand.FromDevice(
+                            device,
+                            Zigbee2MqttChannels.DeviceChannel,
+                            name,
+                            c =>
+                            {
+                                var existingDataValues =
+                                    new List<DeviceContactDataValue>(c.DataValues ??
+                                                                     Enumerable.Empty<DeviceContactDataValue>());
+
+                                // Reassign old value labels
+                                var newDataValues = dataValues?.Select(dv =>
+                                                        new DeviceContactDataValue(dv,
+                                                            existingDataValues.FirstOrDefault(edv => edv.Value == dv)
+                                                                ?.Label)) ??
+                                                    existingDataValues;
+
+                                return c with {DataType = dataType, Access = access, DataValues = newDataValues};
+                            }),
+                        cancellationToken);
+                }
             }
         }
 

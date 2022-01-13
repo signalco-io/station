@@ -41,8 +41,6 @@ internal class SignalDevicesClient : ISignalDevicesClient
                 d.DeviceIdentifier ?? throw new InvalidOperationException(),
                 endpoints)
             {
-                Manufacturer = d.Manufacturer,
-                Model = d.Model,
                 States = d.States?.Select(ds => (
                              new DeviceTarget(ds.Channel, d.DeviceIdentifier, ds.Name),
                              DeserializeValue(ds.ValueSerialized))) ??

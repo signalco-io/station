@@ -12,9 +12,5 @@ public class SignalDeviceDto
 
     public IEnumerable<SignalDeviceEndpointDto>? Endpoints { get; set; }
 
-    public string? Manufacturer { get; set; }
-
-    public string? Model { get; set; }
-
     public IEnumerable<SignalDeviceContactStateDto>? States { get; set; }
 }

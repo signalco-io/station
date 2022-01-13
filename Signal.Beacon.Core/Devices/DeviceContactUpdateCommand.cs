@@ -27,3 +27,21 @@ public class DeviceContactUpdateCommand : ICommand
             channelName,
             modifier(deviceConfiguration.ContactOrDefault(channelName, contactName)));
 }
+
+public static class ContactCommands
+{
+    public static DeviceContactUpdateCommand ReadonlyBool(DeviceConfiguration deviceConfiguration, string channelName, string contactName) =>
+        DeviceContactUpdateCommand.FromDevice(deviceConfiguration, channelName, contactName, contact => contact with {Access = DeviceContactAccess.Read, DataType = "bool"});
+
+    public static DeviceContactUpdateCommand ReadonlyString(DeviceConfiguration deviceConfiguration, string channelName, string contactName) =>
+        DeviceContactUpdateCommand.FromDevice(deviceConfiguration, channelName, contactName, contact => contact with {Access = DeviceContactAccess.Read, DataType = "string"});
+
+    public static DeviceContactUpdateCommand Manufacturer(DeviceConfiguration deviceConfiguration, string channelName) =>
+        ReadonlyString(deviceConfiguration, channelName, "model");
+
+    public static DeviceContactUpdateCommand Model(DeviceConfiguration deviceConfiguration, string channelName) =>
+        ReadonlyString(deviceConfiguration, channelName, "manufacturer");
+
+    public static DeviceContactUpdateCommand Online(DeviceConfiguration deviceConfiguration, string channelName) =>
+        ReadonlyBool(deviceConfiguration, channelName, "online");
+}

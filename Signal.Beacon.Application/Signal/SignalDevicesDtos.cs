@@ -29,9 +29,7 @@ public record SignalDeviceEndpointDto(
 
 public record SignalDeviceInfoUpdateDto(
     string DeviceId,
-    string Alias,
-    string? Manufacturer,
-    string? Model);
+    string Alias);
 
 public record SignalDeviceEndpointsUpdateDto(
     string DeviceId,
@@ -39,9 +37,7 @@ public record SignalDeviceEndpointsUpdateDto(
 
 public record SignalDeviceRegisterDto(
     string DeviceIdentifier, 
-    string Alias,
-    string? Manufacturer, 
-    string? Model);
+    string Alias);
 
 public record SignalDeviceRegisterResponseDto(string DeviceId);
 

@@ -40,34 +40,17 @@ public class DevicesCommandHandler : IDevicesCommandHandler
         {
             var device = await this.devicesDao.GetAsync(command.Identifier, cancellationToken);
             var deviceId = device?.Id;
-            if (device == null || string.IsNullOrWhiteSpace(deviceId))
-            {
-                deviceId = await this.signalClient.RegisterDeviceAsync(command, cancellationToken);
+            if (device != null && !string.IsNullOrWhiteSpace(deviceId)) 
+                return deviceId;
 
-                this.logger.LogInformation(
-                    "New device discovered: {DeviceAlias} ({DeviceIdentifier}).",
-                    command.Alias, command.Identifier);
+            deviceId = await this.signalClient.RegisterDeviceAsync(command, cancellationToken);
 
-                this.devicesDao.InvalidateDevice();
-            }
-            else
-            {
-                // Update info if needed
-                if (command.Manufacturer != device.Manufacturer ||
-                    command.Model != device.Model)
-                {
-                    var updatedCommand = command with {Alias = device.Alias};
+            this.logger.LogInformation(
+                "New device discovered: {DeviceAlias} ({DeviceIdentifier}).",
+                command.Alias, command.Identifier);
 
-                    await this.signalClient.UpdateDeviceInfoAsync(deviceId, updatedCommand, cancellationToken);
+            this.devicesDao.InvalidateDevice();
 
-                    this.logger.LogInformation(
-                        "Updated device info: {DeviceAlias} ({DeviceIdentifier}).",
-                        updatedCommand.Alias, updatedCommand.Identifier);
-
-                    this.devicesDao.InvalidateDevice();
-                }
-            }
-                
             return deviceId;
         }
         catch (Exception ex)
