@@ -59,7 +59,9 @@ internal class ConductManager : IConductManager, ICommandHandler<ConductPublishC
         {
             var device = await this.devicesDao.GetByIdAsync(request.DeviceId, cancellationToken);
             conducts.Add(new Conduct(
-                new DeviceTarget(request.ChannelName, device?.Identifier ?? request.DeviceId,
+                new DeviceTarget(
+                    request.ChannelName, 
+                    device?.Identifier ?? request.DeviceId,
                     request.ContactName),
                 request.ValueSerialized,
                 request.Delay ?? 0)

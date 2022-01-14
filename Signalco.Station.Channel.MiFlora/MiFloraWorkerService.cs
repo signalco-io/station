@@ -333,7 +333,6 @@ internal class MiFloraWorkerService : IWorkerService
                 // Validate values
                 if (temperature is < -30 or > 80 ||
                     moisture is < 0 or > 100 ||
-                    light < 0 ||
                     conductivity is < 0 or > 20000)
                 {
                     // TODO: Invalidate read
