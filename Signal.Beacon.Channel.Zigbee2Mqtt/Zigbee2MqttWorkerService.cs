@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Signal.Beacon.Application.Mqtt;
 using Signal.Beacon.Core.Architecture;
@@ -13,6 +14,7 @@ using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Workers;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Signal.Beacon.Channel.Zigbee2Mqtt;
 
@@ -343,9 +345,13 @@ internal class Zigbee2MqttWorkerService : IWorkerService
         }
         else if (bridgeDevice.Definition is { Exposes: { } })
         {
+            // Check if we need to rename the device
+            if (device.Alias != bridgeDevice.FriendlyName)
+                await this.RenameDeviceAsync(device.Identifier, device.Alias);
+
             foreach (var feature in bridgeDevice.Definition.Exposes.SelectMany(e =>
-                new List<BridgeDeviceExposeFeature>(e.Features ??
-                                                    Enumerable.Empty<BridgeDeviceExposeFeature>()) { e }))
+                         new List<BridgeDeviceExposeFeature>(e.Features ??
+                                                             Enumerable.Empty<BridgeDeviceExposeFeature>()) { e }))
             {
                 var name = feature.Property;
                 var type = feature.Type;
@@ -398,6 +404,25 @@ internal class Zigbee2MqttWorkerService : IWorkerService
 
         // Refresh current states
         await this.RefreshDeviceAsync(deviceConfig.Identifier, cancellationToken);
+    }
+
+    private async Task RenameDeviceAsync(string deviceIdentifier, string alias)
+    {
+        this.logger.LogInformation("Renaming device {DeviceIdentifier} to {Alias}...", deviceIdentifier, alias);
+
+        try
+        {
+            const string topic = "zigbee2mqtt/bridge/request/device/rename";
+            await Task.WhenAll(this.clients.Select(c => c.PublishAsync(topic, JsonConvert.SerializeObject(new
+            {
+                from = deviceIdentifier.Replace(Zigbee2MqttChannels.DeviceChannel + "/", ""),
+                to = alias
+            }))));
+        }
+        catch (Exception ex)
+        {
+            this.logger.LogWarning(ex, "Failed to rename device.");
+        }
     }
 
     private async Task RefreshDeviceAsync(string deviceIdentifier, CancellationToken cancellationToken)
