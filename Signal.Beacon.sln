@@ -7,6 +7,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon", "Signal.Bea
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{85BB4FFB-F8A9-4D0F-98A4-9F2489A7461C}"
 	ProjectSection(SolutionItems) = preProject
+		DEVELOPMENT.md = DEVELOPMENT.md
 		NuGet.config = NuGet.config
 		README.md = README.md
 	EndProjectSection
@@ -41,7 +42,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Channel.iRobo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signal.Beacon.Voice.Tests", "Signal.Beacon.Voice.Tests\Signal.Beacon.Voice.Tests.csproj", "{A64365A9-8357-400B-B28F-3427F2859702}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Signalco.Station.Channel.MiFlora", "Signalco.Station.Channel.MiFlora\Signalco.Station.Channel.MiFlora.csproj", "{CEB8F61F-E257-41B2-AC82-B2A93A35C2DA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Signalco.Station.Channel.MiFlora", "Signalco.Station.Channel.MiFlora\Signalco.Station.Channel.MiFlora.csproj", "{CEB8F61F-E257-41B2-AC82-B2A93A35C2DA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
