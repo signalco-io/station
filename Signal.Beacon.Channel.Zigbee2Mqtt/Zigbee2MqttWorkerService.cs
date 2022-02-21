@@ -239,7 +239,7 @@ internal class Zigbee2MqttWorkerService : IWorkerService
         var device = await this.devicesDao.GetByAliasAsync(deviceAlias, cancellationToken);
         if (device == null)
         {
-            this.logger.LogDebug("Device {DeviceAlias} not found", deviceAlias);
+            this.logger.LogDebug("Entity {DeviceAlias} not found", deviceAlias);
             return;
         }
 
