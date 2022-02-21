@@ -14,74 +14,25 @@
 
 Visit <a aria-label="Signalco learn" href="https://www.signalco.io/learn">https://www.signalco.io/learn</a> to get started with Signalco.
 
-## Development for Station
+## Contributing
 
-Deployments
+More info on development can be found in [Development](/development.md) document.
 
-[![Create new release](https://github.com/signalco-io/station/actions/workflows/create-release.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/create-release.yml)
+## Related
 
-[![Publish Binaries](https://github.com/signalco-io/station/actions/workflows/release-binaries.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/release-binaries.yml)
+- [🌐 Website](https://www.signalco.io)
+- [✔️ Status page](https://status.signalco.io)
+- [🖌️ Figma files](https://www.figma.com/file/8cMJOfjFdQBiGdWTvr2SB1/Signalco.io-Design?node-id=78%3A684)
+- [Signalco Station](https://github.com/signalco-io/station)
+- [Signalco Cloud](https://github.com/signalco-io/cloud)
+- [Signalco Companion](https://github.com/signalco-io/companion)
 
-Code
+## License
 
-[![CodeQL](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/signalco-io/station/actions/workflows/codeql-analysis.yml)
-[![Maintainability](https://api.codeclimate.com/v1/badges/61b2b1f79a40220b7054/maintainability)](https://codeclimate.com/github/signalco-io/station/maintainability)
-[![CodeFactor](https://www.codefactor.io/repository/github/signalco-io/station/badge)](https://www.codefactor.io/repository/github/signalco-io/station)
+[GNU General Public License v3.0](LICENSE)
 
-### Commits
+## Sponsors ✨
 
-Commit messages need to contain semantic-release anotations in order to propperly trigger release.
+Many thanks to our sponsors!
 
-The table below shows which commit message gets you which release type when `semantic-release` runs (using the default configuration):
-
-| Commit message | Release type               |
-| -------------- | -------------------------- |
-| `fix(Docs): Fixed a typo in documentation` | Patch Release |
-| `feat(Docs): Added new documentation file` | Feature Release |
-| `perf(Docs): Removed documentation for feature`<br><br>`BREAKING CHANGE: The documentation for this feature was removed.`<br>`This feature is no longer supported.` | Breaking Release |
-
-For more info see [semantic-release](https://semantic-release.gitbook.io/semantic-release/).
-
-### Publishing
-
-Example publish command for Windows x64 target:
-
-```bash
-dotnet publish -r win-x64 --self-contained true
-```
-
-Example publish command for ARM64 (eg. >= Rpi3) target:
-
-```bash
-dotnet publish -r linux-arm64 --self-contained true
-```
-
-_[.NET Core RID Catalog](https://docs.microsoft.com/en-us/dotnet/core/rid-catalog) for more options for `-r` flag._
-
-## Services
-
-**Internal**
-
-- Processor
-- Voice
-- ConductHandler
-
-**Channels**
-
-- BroadLink
-- Divoom
-- iRobot
-- PhilipsHue
-- Processor
-- Signal
-- Samsung
-- Tasmota
-- Zigbee2Mqtt
-
-### Voice
-
-#### Wake word - Porcupine
-
-Wake word aucustic model is located in:
-
-- `resourceskeyword_files/<PLATFORM>/computer.ppn`
+![JetBrains](/docs/jb_beam.png)
