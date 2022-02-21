@@ -5,6 +5,8 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using HueApi;
+using HueApi.Models.Responses;
 using Microsoft.Extensions.Logging;
 using Q42.HueApi;
 using Q42.HueApi.Interfaces;
@@ -59,45 +61,55 @@ internal class PhilipsHueWorkerService : IWorkerService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         this.configuration = await this.LoadBridgeConfigsAsync(cancellationToken);
-        if (!this.configuration.Bridges.Any())
-            _ = this.DiscoverBridgesAsync(true, cancellationToken);
-        else
+
+        // Remove duplicate bridge configuration (same IP address)
+        var ipAddresses = new List<string>();
+        for (var i = this.configuration.Bridges.Count - 1; i >= 0; i--)
         {
-            // Connect to already configured bridges
-            foreach (var bridgeConfig in this.configuration.Bridges.ToList())
-                _ = this.ConnectBridgeAsync(bridgeConfig, cancellationToken);
+            var currentIpAddress = this.configuration.Bridges[i].IpAddress;
+            if (ipAddresses.Contains(currentIpAddress))
+            {
+                this.configuration.Bridges.RemoveAt(i);
+                this.logger.LogInformation("Removed bridge because IP address {IpAddress} already assigned", currentIpAddress);
+            }
+            else ipAddresses.Add(currentIpAddress);
         }
+
+        // Connect to already configured bridges
+        foreach (var bridgeConfig in this.configuration.Bridges.ToList())
+            _ = this.ConnectBridgeAsync(bridgeConfig, cancellationToken);
 
         _ = Task.Run(() => this.PeriodicalLightStateRefreshAsync(cancellationToken), cancellationToken);
 
         this.conductSubscriberClient.Subscribe(PhilipsHueChannels.DeviceChannel, this.ConductHandlerAsync);
     }
 
-    private async void BeginStreamClip(BridgeConfig config, CancellationToken cancellationToken)
+    private void BeginStreamClip(BridgeConfig config, CancellationToken cancellationToken)
     {
-        var client = new HttpClient(new HttpClientHandler
-            { ServerCertificateCustomValidationCallback = (_, _, _, _) => true });
-        client.DefaultRequestHeaders.Add("hue-application-key", config.LocalAppKey);
-        var clipUrl = "https://" + config.IpAddress + "/eventstream/clip/v2";
+        var clipClient = new LocalHueApi(config.IpAddress, config.LocalAppKey);
+        clipClient.OnEventStreamMessage += (events) => HandleClipMessage(config.Id, events, cancellationToken);
+    }
 
-        while (!cancellationToken.IsCancellationRequested)
+    private async void HandleClipMessage(string bridgeId, IEnumerable<EventStreamResponse> events, CancellationToken cancellationToken)
+    {
+        foreach (var data in events.SelectMany(hueEvent => hueEvent.Data.Where(data => !string.IsNullOrWhiteSpace(data.IdV1))))
         {
-            try
-            {
-                var response = await client.GetAsync(clipUrl, cancellationToken);
-                if (response.IsSuccessStatusCode)
-                    await this.RefreshDeviceStatesAsync(config.Id, cancellationToken);
-            }
-            catch
-            {
-                // Wait for next one
-            }
+            var bridge = await this.GetBridgeConnectionAsync(bridgeId);
+            if (data.IdV1 != null && this.lights.TryGetValue(data.IdV1, out var light))
+                await this.RefreshLightStateAsync(bridge, light, cancellationToken);
         }
     }
 
     private async Task ConductHandlerAsync(IEnumerable<Conduct> conducts, CancellationToken cancellationToken)
     {
-        var conductsTasks = conducts
+        var conductsList = conducts.ToList();
+
+        // Handle discover request
+        if (conductsList.Any(c => c.Target.Identifier == "channel" && c.Target.Contact == "discover"))
+            _ = this.DiscoverBridgesAsync(true, cancellationToken);
+
+        // Handle light conducts
+        var conductsTasks = conductsList
             .GroupBy(c => c.Target.Identifier)
             .Select(lightIdentifierConducts =>
                 this.ExecuteLightConductsAsync(cancellationToken, lightIdentifierConducts));
@@ -269,7 +281,7 @@ internal class PhilipsHueWorkerService : IWorkerService
     {
         try
         {
-            this.logger.LogInformation("Connecting to bridges {BridgeId} {BridgeIpAddress}...",
+            this.logger.LogInformation("Connecting to bridge {BridgeId} {BridgeIpAddress}...",
                 config.Id,
                 config.IpAddress);
 

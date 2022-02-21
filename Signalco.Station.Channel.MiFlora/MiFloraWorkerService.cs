@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using HashtagChris.DotNetBlueZ;
+﻿using HashtagChris.DotNetBlueZ;
 using HashtagChris.DotNetBlueZ.Extensions;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Architecture;
@@ -22,7 +17,7 @@ internal class MiFloraWorkerService : IWorkerService
     private readonly ICommandHandler<DeviceStateSetCommand> deviceStateHandler;
     private readonly IShellService shell;
     private readonly ILogger<MiFloraWorkerService> logger;
-    private static readonly SemaphoreSlim btLock = new(1, 1);
+    private static readonly SemaphoreSlim BtLock = new(1, 1);
     private Adapter? adapter;
     private readonly List<string> knownDevices = new();
     private readonly List<string> ignoredDevices = new();
@@ -191,7 +186,7 @@ internal class MiFloraWorkerService : IWorkerService
 
     private async Task ProcessDeviceAsync(IDevice1 btDevice, CancellationToken cancellationToken)
     {
-        await btLock.WaitAsync(cancellationToken);
+        await BtLock.WaitAsync(cancellationToken);
 
         try
         {
@@ -396,7 +391,7 @@ internal class MiFloraWorkerService : IWorkerService
         }
         finally
         {
-            btLock.Release();
+            BtLock.Release();
         }
     }
 
