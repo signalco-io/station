@@ -16,7 +16,7 @@ Visit <a aria-label="Signalco learn" href="https://www.signalco.io/learn">https:
 
 ## Contributing
 
-More info on development can be found in [Development](/development.md) document.
+More info on development can be found in [Development](/DEVELOPMENT.md) document.
 
 ## Related
 
