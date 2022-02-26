@@ -13,7 +13,7 @@ using MQTTnet.Client.Connecting;
 using MQTTnet.Client.Disconnecting;
 using MQTTnet.Client.Options;
 using MQTTnet.Extensions.ManagedClient;
-using MQTTnet.Server;
+using MQTTnet.Server.Internal;
 using Signal.Beacon.Core.Mqtt;
 using IMqttClient = Signal.Beacon.Core.Mqtt.IMqttClient;
 using JsonSerializer = System.Text.Json.JsonSerializer;
