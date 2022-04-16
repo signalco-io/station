@@ -327,21 +327,10 @@ public class PorcupineWakeWordClient : IDisposable
             throw new Exception("Couldn't determine Porcupine version.");
 
         // Locate profile file
-        var osPlatform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? "windows"
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux" : "mac";
-        var modelsAvailable = Directory.EnumerateFiles(Path.Combine(executionLocation,
-            $"resources/keyword_files/{osPlatform}/"), "*.ppn").ToList();
-        var orderedModelsAvailable = modelsAvailable.OrderByDescending(m => m);
-        var matchingModelName = orderedModelsAvailable.FirstOrDefault(m => m.Contains("computer"));
-        if (matchingModelName == null)
-            throw new Exception(
-                $"Didn't match any valid Porcupine models. Available models: {string.Join(", ", modelsAvailable)}");
-        this.logger.LogDebug("Porcupine model selected: {ModelName}", matchingModelName);
-
-        this.porcupine = new Porcupine(
+        this.porcupine = Porcupine.FromBuiltInKeywords(
             Path.Combine(executionLocation, PorcupineModelFilePath),
-            new[] { Path.Combine(executionLocation, "Profiles", matchingModelName) },
+            new [] {BuiltInKeyword.COMPUTER},
+            Path.Combine(executionLocation, "Profiles"),
             new[] { PorcupineSensitivity });
         this.porcupineRecordingBuffer = new short[this.porcupine.FrameLength];
     }
