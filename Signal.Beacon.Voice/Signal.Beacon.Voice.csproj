@@ -17,7 +17,7 @@
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="Google.Apis" Version="1.57.0" />
     <PackageReference Include="Google.Cloud.Speech.V1" Version="2.7.0" />
-    <PackageReference Include="OpenTK.OpenAL" Version="5.0.0-pre.6" />
+    <PackageReference Include="OpenTK.OpenAL" Version="5.0.0-pre.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.1" />
     <PackageReference Include="Porcupine" Version="2.1.2" />
