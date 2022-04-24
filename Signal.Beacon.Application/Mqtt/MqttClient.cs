@@ -59,7 +59,7 @@ public class MqttClient : IMqttClient
 
         try
         {
-            var addresses = await Dns.GetHostAddressesAsync(hostAddress);
+            var addresses = await Dns.GetHostAddressesAsync(hostAddress, cancellationToken);
             var selectedAddress = addresses.FirstOrDefault();
             if (selectedAddress == null)
                 throw new Exception("Invalid host address - none.");

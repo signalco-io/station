@@ -254,36 +254,39 @@ internal class Zigbee2MqttWorkerService : IWorkerService
         }
 
         // Get JSON properties (inside object)
-        var jsonPayload = JToken.Parse(payload);
-        var jsonPayloadObject = jsonPayload.Value<JObject>();
-        var properties = jsonPayloadObject?.Properties();
-        if (properties == null)
-            return;
-
-        foreach (var jProperty in properties)
+        if (payload.StartsWith("{") && payload.EndsWith("}"))
         {
-            var input = inputs.FirstOrDefault(i => i.Name == jProperty.Name);
-            if (input == null)
-                continue;
-
-            var target = new DeviceTarget(Zigbee2MqttChannels.DeviceChannel, device.Identifier, jProperty.Name);
-            var value = jProperty.Value.Value<string>();
-            var dataType = input.DataType;
-            var mappedValue = MapZ2MValueToValue(dataType, value);
-
-            // Ignore empty string values (no data)
-            if (dataType != "string" &&
-                string.IsNullOrEmpty(value))
+            var jsonPayload = JToken.Parse(payload);
+            var jsonPayloadObject = jsonPayload.Value<JObject>();
+            var properties = jsonPayloadObject?.Properties();
+            if (properties == null)
                 return;
 
-            try
+            foreach (var jProperty in properties)
             {
-                await this.deviceSetStateHandler.HandleAsync(new DeviceStateSetCommand(target, mappedValue),
-                    cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                this.logger.LogWarning(ex, "Failed to set device state {Target} to {Value}.", target, value);
+                var input = inputs.FirstOrDefault(i => i.Name == jProperty.Name);
+                if (input == null)
+                    continue;
+
+                var target = new DeviceTarget(Zigbee2MqttChannels.DeviceChannel, device.Identifier, jProperty.Name);
+                var value = jProperty.Value.Value<string>();
+                var dataType = input.DataType;
+                var mappedValue = MapZ2MValueToValue(dataType, value);
+
+                // Ignore empty string values (no data)
+                if (dataType != "string" &&
+                    string.IsNullOrEmpty(value))
+                    return;
+
+                try
+                {
+                    await this.deviceSetStateHandler.HandleAsync(new DeviceStateSetCommand(target, mappedValue),
+                        cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogWarning(ex, "Failed to set device state {Target} to {Value}.", target, value);
+                }
             }
         }
     }
@@ -346,7 +349,9 @@ internal class Zigbee2MqttWorkerService : IWorkerService
         else if (bridgeDevice.Definition is { Exposes: { } })
         {
             // Check if we need to rename the device
-            if (device.Alias != bridgeDevice.FriendlyName)
+            if (device.Alias != bridgeDevice.FriendlyName && 
+                !device.Alias.StartsWith("0x") && 
+                (bridgeDevice.FriendlyName?.StartsWith("0x") ?? true))
                 await this.RenameDeviceAsync(device.Identifier, device.Alias);
 
             foreach (var feature in bridgeDevice.Definition.Exposes.SelectMany(e =>
