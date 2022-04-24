@@ -66,7 +66,7 @@ public class MqttDiscoveryService : IMqttDiscoveryService
                             "MQTT broker responded with expected topic on {IpAddress}",
                             applicableHost.IpAddress);
 
-                        didReceiveExpectedTopisMessageTask.SetResult();
+                        didReceiveExpectedTopisMessageTask.TrySetResult();
                         return Task.CompletedTask;
                     });
 
