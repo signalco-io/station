@@ -27,6 +27,7 @@ internal class SignalClient : ISignalClient, ISignalClientAuthFlow
 
     public event EventHandler<AuthToken?>? OnTokenRefreshed;
 
+    
     public SignalClient(ILogger<SignalClient> logger)
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));

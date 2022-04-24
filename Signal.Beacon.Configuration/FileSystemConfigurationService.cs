@@ -12,11 +12,13 @@ namespace Signal.Beacon.Configuration;
 
 public class FileSystemConfigurationService : IConfigurationService
 {
+    private readonly ILogger<FileSystemConfigurationService> logger;
     private readonly JsonSerializerSettings deserializationSettings;
     private readonly JsonSerializerSettings serializationSettings;
 
     public FileSystemConfigurationService(ILogger<FileSystemConfigurationService> logger)
     {
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.serializationSettings = new JsonSerializerSettings
         {
             NullValueHandling = NullValueHandling.Include,
@@ -54,8 +56,10 @@ public class FileSystemConfigurationService : IConfigurationService
         if (Path.GetDirectoryName(absolutePath) is { } absolutePathDirectory)
             Directory.CreateDirectory(absolutePathDirectory);
 
-        await File.WriteAllTextAsync(absolutePath,
-            JsonConvert.SerializeObject(config, this.serializationSettings), cancellationToken);
+        var configJson = JsonConvert.SerializeObject(config, this.serializationSettings);
+        await File.WriteAllTextAsync(absolutePath, configJson, cancellationToken);
+
+        this.logger.LogDebug("Saving configuration {Path}: {ConfigJson}", path, configJson);
     }
 
     private async Task<T> LoadFromFileSystemAsync<T>(string path, CancellationToken cancellationToken)

@@ -149,7 +149,7 @@ public class MqttClient : IMqttClient
 
     private async Task MessageHandler(MqttApplicationMessageReceivedEventArgs arg)
     {
-        var message = new MqttMessage(this, arg.ApplicationMessage.Topic, Encoding.ASCII.GetString(arg.ApplicationMessage.Payload), arg.ApplicationMessage.Payload);
+        var message = new MqttMessage(this, arg.ApplicationMessage.Topic, Encoding.UTF8.GetString(arg.ApplicationMessage.Payload), arg.ApplicationMessage.Payload);
         this.logger.LogTrace("{ClientName} Topic {Topic}, Payload: {Payload}", this.assignedClientName, message.Topic, message.Payload);
 
         this.OnMessage?.Invoke(this, message);

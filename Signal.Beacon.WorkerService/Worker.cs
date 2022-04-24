@@ -41,7 +41,7 @@ public class Worker : BackgroundService
     {
         // Load configuration
         var config = await this.configurationService.LoadAsync<BeaconConfiguration>("beacon.json", stoppingToken);
-        if (config.Token == null)
+        if (config.Token == null || config.Identifier == null)
         {
             this.logger.LogInformation("Beacon not registered. Started registration...");
                 

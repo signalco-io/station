@@ -49,7 +49,7 @@ public static class Program
             .UseSerilog((context, provider, config) =>
             {
                 config
-                    .MinimumLevel.Debug()
+                    .MinimumLevel.Verbose()
                     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
                     .Enrich.FromLogContext()
                     .WriteTo.File(

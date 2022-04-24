@@ -29,21 +29,27 @@ public class HostInfoService : IHostInfoService
     {
         this.logger.LogDebug("Hosts scanning initiated...");
 
-        var arpResult = (await ArpLookupAsync()).ToList();
+        var arpResult = (await ArpLookupAsync().ConfigureAwait(false)).ToList();
         var pingResults = new List<IHostInfo>();
-        foreach (var ipAddress in ipAddresses)
+        var aliveHosts = await GetAliveHostsAsync(ipAddresses).ConfigureAwait(false);
+        foreach (var aliveHost in aliveHosts)
         {
-            var arpLookupResult = arpResult.FirstOrDefault(a => a.ip == ipAddress);
+            var arpLookupResult = arpResult.FirstOrDefault(a => a.ip == aliveHost.ipAddress);
             var hostInfo = await this.GetHostInformationAsync(
-                ipAddress,
+                aliveHost.ipAddress,
+                aliveHost.ping,
                 scanPorts,
                 arpLookupResult.physical,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
 
             // Ignore if info not retrieved
-            if (hostInfo == null) 
+            if (hostInfo == null)
+            {
+                this.logger.LogTrace("HostInfo {IpAddress}: None", aliveHost);
                 continue;
+            }
 
+            this.logger.LogTrace("HostInfo {IpAddress}: {@HostInfo}", aliveHost, hostInfo);
             pingResults.Add(hostInfo);
         }
 
@@ -53,11 +59,11 @@ public class HostInfoService : IHostInfoService
         return pingResults;
     }
 
-    private async Task<string?> ResolveHostNameAsync(string ipAddress)
+    private async Task<string?> ResolveHostNameAsync(string ipAddress, CancellationToken cancellationToken)
     {
         try
         {
-            var entry = await Dns.GetHostEntryAsync(ipAddress);
+            var entry = await Dns.GetHostEntryAsync(ipAddress, cancellationToken).ConfigureAwait(false);
             return entry.HostName;
         }
         catch
@@ -66,21 +72,33 @@ public class HostInfoService : IHostInfoService
         }
     }
 
+    private async Task<IEnumerable<(string ipAddress, long ping)>> GetAliveHostsAsync(IEnumerable<string> ipAddresses)
+    {
+        var alive = new List<(string ipAddress, long ping)>();
+        await Parallel.ForEachAsync(
+            ipAddresses,
+            new ParallelOptions {MaxDegreeOfParallelism = 3},
+            async (ipAddress, token) =>
+            {
+                var ping = await this.PingIpAddressAsync(ipAddress, token).ConfigureAwait(false);
+                if (ping != null)
+                    alive.Add((ipAddress, ping.Value));
+            }).ConfigureAwait(false);
+        return alive;
+    }
+
     private async Task<HostInfo?> GetHostInformationAsync(
         string address, 
+        long ping,
         IEnumerable<int> applicablePorts, 
         string? arpLookupPhysical,
         CancellationToken cancellationToken)
     {
-        var ping = await this.PingIpAddressAsync(address, cancellationToken);
-        if (ping == null)
-            return null;
+        var portPing = Math.Min(3000, Math.Max(500, ping * 100)); // Adaptive port connection timeout based on ping value
+        var openPorts = OpenPorts(address, applicablePorts, TimeSpan.FromMilliseconds(portPing)).ToList();
+        var hostName = await this.ResolveHostNameAsync(address, cancellationToken).ConfigureAwait(false);
 
-        var portPing = Math.Min(3000, Math.Max(500, ping.Value * 100)); // Adaptive port connection timeout based on ping value
-        var openPorts = (await OpenPortsAsync(address, applicablePorts, TimeSpan.FromMilliseconds(portPing))).ToList();
-        var hostName = await this.ResolveHostNameAsync(address);
-
-        return new HostInfo(address, ping.Value)
+        return new HostInfo(address, ping)
         {
             OpenPorts = openPorts,
             PhysicalAddress = arpLookupPhysical,
@@ -104,7 +122,7 @@ public class HostInfoService : IHostInfoService
                 }
             };
             pProcess.Start();
-            string cmdOutput = await pProcess.StandardOutput.ReadToEndAsync();
+            var cmdOutput = await pProcess.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
 
             // Regex supports following outputs:
             // Windows (10): 192.168.0.1           00-00-00-00-00-00     dynamic
@@ -137,7 +155,7 @@ public class HostInfoService : IHostInfoService
         {
             try
             {
-                var result = (await ping.SendPingAsync(address, timeout).ConfigureAwait(false));
+                var result = await ping.SendPingAsync(address, timeout).ConfigureAwait(false);
                 if (result.Status == IPStatus.Success)
                 {
                     this.logger.LogTrace("Host {HostIp} alive ({Roundtrip}ms)", address, result.RoundtripTime);
@@ -150,12 +168,16 @@ public class HostInfoService : IHostInfoService
             }
         }
 
+        this.logger.LogTrace("Host {HostIp} dead", address);
+
         return null;
     }
 
-    private static async Task<IEnumerable<int>> OpenPortsAsync(string host, IEnumerable<int> ports, TimeSpan timeout)
+    private static IEnumerable<int> OpenPorts(string host, IEnumerable<int> ports, TimeSpan timeout)
     {
-        var tasks = ports.Select(port => Task.Run(() =>
+        var openPorts = new List<int>();
+
+        Parallel.ForEach(ports, new ParallelOptions {MaxDegreeOfParallelism = 3}, port =>
         {
             try
             {
@@ -163,15 +185,17 @@ public class HostInfoService : IHostInfoService
                 var result = client.BeginConnect(host, port, null, null);
                 var success = result.AsyncWaitHandle.WaitOne(timeout);
                 client.EndConnect(result);
-                return (Port: port, Open: success);
+                if (success)
+                {
+                    openPorts.Add(port);
+                }
             }
             catch
             {
-                return (Port: port, Open: false);
+                // Not open
             }
-        }));
+        });
 
-        var openPorts = await Task.WhenAll(tasks);
-        return openPorts.Where(p => p.Open).Select(p => p.Port);
+        return openPorts;
     }
 }
