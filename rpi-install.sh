@@ -5,25 +5,20 @@ then
 	exit 1
 fi
 
-# Create SWAP file
-grep -q "swapfile" /etc/fstab
-if [ $? -ne 0 ]; then
-	echo 'swapfile not found. Adding swapfile...'
-  sudo fallocate -l 1G /swapfile
-  sudo chmod 600 /swapfile
-  sudo mkswap /swapfile
-  sudo swapon /swapfile
-  sudo cp /etc/fstab /etc/fstab.bak
-  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-else
-  echo 'swapfile already configured'
-fi
+## Housekeeping
+echo "Updating system..."
+sudo bash -c 'for i in update {,dist-}upgrade auto{remove,clean}; do apt-get $i -y; done'
 
 ## Configure hostname
-echo "Setting hostname to 'signalcostation'..."
-sudo hostnamectl set-hostname signalcostation
+CURRENT_HOSTNAME=$(hostname)
+if [ $CURRENT_HOSTNAME != "signalcostation" ]; then
+  echo "Setting hostname to 'signalcostation'...";
+  sudo hostnamectl set-hostname signalcostation
+fi
+echo "Hostname: $(hostname)"
 
 ## Configure firewall
+sudo apt-get install -y ufw
 echo "Configuring firewall..."
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
@@ -33,33 +28,21 @@ sudo ufw allow 8080 # Allow Z2M UI (Optional)
 sudo ufw allow 80 # Allow Station UI
 echo "y" | sudo ufw enable
 
-## Housekeeping
-echo "Updating system..."
-sudo bash -c 'for i in update {,dist-}upgrade auto{remove,clean}; do apt-get $i -y; done'
-
-### Disable snap updates (metered connection) and do update now
-echo "Disabling SNAP updates..."
-sudo snap set system refresh.metered=hold
-echo "Updating snaps..."
-sudo snap refresh
-
 ## Install node
-echo "Checking if NodeJS is installed..."
-node=$(which npm)
-if [ -z "${node}" ]; then #Installing NodeJS if not already installed.
+NODE=$(which npm)
+if [ -z "${NODE}" ]; then #Installing NodeJS if not already installed.
   printf "Downloading and installing NodeJS...\\n"
-  curl -sL https://deb.nodesource.com/setup_14.x | bash -
-  sudo apt install -y nodejs npm
+  curl -sL https://deb.nodesource.com/setup_16.x | bash -
+  sudo apt-get update
+  sudo apt-get install -y gcc g++ make nodejs
 fi
+echo "Node version: $(node --version)"
 
 # Install prerequesites
 echo "Installing dependencies..."
 sudo apt-get install -y make g++ gcc bluez jq mosquitto net-tools
 
-## TODO: Apply BT Fix: https://askubuntu.com/a/1166847
-
 ## Configure mosquitto
-### TODO: Test this
 echo "listener 1883
 allow_anonymous true" > /etc/mosquitto/conf.d/mosquitto.conf
 
@@ -75,6 +58,7 @@ sudo chown -R ubuntu:ubuntu /opt/signalcostation
 cd /opt/signalcostation || exit
 
 ## Configure service
+CURRENT_USER=$(whoami)
 echo "Creating service file signalcostation.service and enableing..."
 service_path="/etc/systemd/system/signalcostation.service"
 echo "[Unit]
@@ -86,7 +70,7 @@ WorkingDirectory=/opt/signalcostation/$FILENAME
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-User=ubuntu
+User=$CURRENT_USER
 [Install]
 WantedBy=multi-user.target" > $service_path
 sudo systemctl enable signalcostation.service
