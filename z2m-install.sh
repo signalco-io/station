@@ -30,3 +30,24 @@ User=$CURRENT_USER
 [Install]
 WantedBy=multi-user.target" > $service_path
 sudo systemctl enable zigbee2mqtt.service
+
+echo "Configuring Z2M..."
+echo "
+homeassistant: false
+permit_join: false
+availability: true
+frontend: true
+mqtt:
+  base_topic: zigbee2mqtt
+  server: 'mqtt://localhost'
+serial:
+  port: /dev/ttyACM0
+  disable_led: true
+advanced:
+    network_key: GENERATE
+	log_output: 
+	  - 'console'
+" > /opt/zigbee2mqtt/data/configuration.yaml
+
+echo "Starting Z2M..."
+sudo systemctl start zigbee2mqtt.service
