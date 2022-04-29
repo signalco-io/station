@@ -5,16 +5,17 @@ then
 	exit 1
 fi
 
+CURRENT_USER=$(whoami)
+
 echo "Cloning Zigbee2mqtt git repository..."
 sudo git clone --single-branch --branch master https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
-sudo chown -R ubuntu:ubuntu /opt/zigbee2mqtt
+sudo chown -R $CURRENT_USER:$CURRENT_USER /opt/zigbee2mqtt
 
 echo "Running zigbee2mqtt install... This might take a while and can produce som expected errors"
 cd /opt/zigbee2mqtt || exit
 npm ci
 
 echo "Creating service file zigbee2mqtt.service and enableing..."
-CURRENT_USER=$(whoami)
 service_path="/etc/systemd/system/zigbee2mqtt.service"
 echo "[Unit]
 Description=zigbee2mqtt
