@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,6 @@ using MQTTnet.Client;
 using MQTTnet.Extensions.ManagedClient;
 using Signal.Beacon.Core.Mqtt;
 using IMqttClient = Signal.Beacon.Core.Mqtt.IMqttClient;
-using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Signal.Beacon.Application.Mqtt;
 
