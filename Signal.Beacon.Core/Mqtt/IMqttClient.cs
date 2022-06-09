@@ -18,5 +18,6 @@ public interface IMqttClient : IDisposable
     Task PublishAsync(string topic, object? payload, bool retain = false);
 
     event EventHandler? OnUnavailable;
+
     event EventHandler<MqttMessage>? OnMessage;
 }

@@ -5,18 +5,15 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
-using MQTTnet.Client.Connecting;
-using MQTTnet.Client.Disconnecting;
-using MQTTnet.Client.Options;
+using MQTTnet.Client;
 using MQTTnet.Extensions.ManagedClient;
-using MQTTnet.Server.Internal;
 using Signal.Beacon.Core.Mqtt;
 using IMqttClient = Signal.Beacon.Core.Mqtt.IMqttClient;
-using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Signal.Beacon.Application.Mqtt;
 
@@ -31,8 +28,7 @@ public class MqttClient : IMqttClient
 
     public event EventHandler<MqttMessage>? OnMessage;
 
-    private const int UnavailableConnectionFailedThreshold = 5;
-    private int connectionFailedCounter;
+    private bool isDisconnected;
     public event EventHandler? OnUnavailable;
 
 
@@ -88,9 +84,9 @@ public class MqttClient : IMqttClient
                 .Build();
 
             this.mqttClient = new MqttFactory().CreateManagedMqttClient();
-            this.mqttClient.UseApplicationMessageReceivedHandler(this.MessageHandler);
-            this.mqttClient.UseConnectedHandler(this.ConnectedHandler);
-            this.mqttClient.UseDisconnectedHandler(this.DisconnectedHandler);
+            this.mqttClient.ApplicationMessageReceivedAsync += this.MessageHandler;
+            this.mqttClient.ConnectedAsync += this.ConnectedHandler;
+            this.mqttClient.DisconnectedAsync += this.DisconnectedHandler;
             await this.mqttClient.StartAsync(options);
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.HostNotFound)
@@ -107,15 +103,14 @@ public class MqttClient : IMqttClient
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        this.connectionFailedCounter = 0;
+        this.isDisconnected = true;
         if (this.mqttClient != null)
             await this.mqttClient.StopAsync();
     }
 
     public async Task SubscribeAsync(string topic, Func<MqttMessage, Task> handler)
     {
-        await this.mqttClient.SubscribeAsync(
-            new MqttTopicFilterBuilder().WithTopic(topic).Build());
+        await this.mqttClient.SubscribeAsync(topic);
 
         if (!this.subscriptions.ContainsKey(topic))
         {
@@ -136,26 +131,28 @@ public class MqttClient : IMqttClient
             _ => Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload, payload.GetType()))
         };
 
-        var result = await this.mqttClient.PublishAsync(
-            new MqttApplicationMessageBuilder()
-                .WithTopic(topic)
-                .WithPayload(withPayload)
-                .WithRetainFlag(retain)
-                .Build());
-
-        this.logger.LogTrace("{ClientName} Topic {Topic}, Response: ({StatusCode}) {Response}",
-            this.assignedClientName, topic, result.ReasonCode, result.ReasonString);
+        var message = new MqttApplicationMessageBuilder()
+            .WithTopic(topic)
+            .WithPayload(withPayload)
+            .WithRetainFlag(retain)
+            .Build();
+        await this.mqttClient.EnqueueAsync(message);
     }
 
     private async Task MessageHandler(MqttApplicationMessageReceivedEventArgs arg)
     {
-        var message = new MqttMessage(this, arg.ApplicationMessage.Topic, Encoding.UTF8.GetString(arg.ApplicationMessage.Payload), arg.ApplicationMessage.Payload);
+        var message = new MqttMessage(
+            this, 
+            arg.ApplicationMessage.Topic, 
+            Encoding.UTF8.GetString(arg.ApplicationMessage.Payload), 
+            arg.ApplicationMessage.Payload);
+
         this.logger.LogTrace("{ClientName} Topic {Topic}, Payload: {Payload}", this.assignedClientName, message.Topic, message.Payload);
 
         this.OnMessage?.Invoke(this, message);
 
         foreach (var subscription in this.subscriptions
-            .Where(subscription => MqttTopicFilterComparer.IsMatch(arg.ApplicationMessage.Topic, subscription.Key))
+            .Where(subscription => MqttTopicFilterComparer.Compare(arg.ApplicationMessage.Topic, subscription.Key) == MqttTopicFilterCompareResult.IsMatch)
             .SelectMany(s => s.Value))
         {
             try
@@ -169,26 +166,20 @@ public class MqttClient : IMqttClient
         }
     }
 
-    private Task DisconnectedHandler(MqttClientDisconnectedEventArgs arg)
+    private Task DisconnectedHandler(EventArgs arg)
     {
-        // Dispatch unavailable event when connection failed counter reaches threshold
-        // Set counter to min value so we don't dispatch event again
-        if (arg.Exception?.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused } &&
-            ++this.connectionFailedCounter >= UnavailableConnectionFailedThreshold)
+        if (!this.isDisconnected)
         {
+            this.isDisconnected = true;
             this.OnUnavailable?.Invoke(this, EventArgs.Empty);
-            this.connectionFailedCounter = int.MinValue;
         }
-
-        // Log connection closed only if connection was successfully established
-        this.logger.LogInformation(arg.Exception, "MQTT connection closed {ClientName}. Reason: {Reason}", this.assignedClientName, arg.Reason);
 
         return Task.CompletedTask;
     }
 
-    private Task ConnectedHandler(MqttClientConnectedEventArgs arg)
+    private Task ConnectedHandler(EventArgs arg)
     {
-        this.connectionFailedCounter = 0;
+        this.isDisconnected = false;
         this.logger.LogInformation("MQTT connected {ClientName}.", this.assignedClientName);
         return Task.CompletedTask;
     }

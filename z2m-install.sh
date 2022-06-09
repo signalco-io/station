@@ -45,8 +45,8 @@ serial:
   disable_led: true
 advanced:
     network_key: GENERATE
-	log_output: 
-	  - 'console'
+    log_output: 
+    - 'console'
 " > /opt/zigbee2mqtt/data/configuration.yaml
 
 echo "Starting Z2M..."

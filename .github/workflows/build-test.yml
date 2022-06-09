@@ -1,0 +1,36 @@
+name: "build-test"
+on:
+  pull_request:
+    branches: [next, main]
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        kind: ["arm-x64", "windows-x64"]
+        include:
+          - kind: arm-x64
+            os: ubuntu-latest
+            target: linux-arm64
+          - kind: windows-x64
+            os: windows-latest
+            target: win-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 6.0.x
+          include-prerelease: true
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        shell: bash
+        run: |
+          dotnet build ./Signal.Beacon.WorkerService/Signal.Beacon.csproj -r "${{ matrix.target }}" --self-contained true
