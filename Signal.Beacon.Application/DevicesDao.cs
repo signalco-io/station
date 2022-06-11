@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Signal;
-using Signal.Beacon.Core.Values;
 
 namespace Signal.Beacon.Application;
 
@@ -112,10 +111,7 @@ public class DevicesDao : IDevicesDao
                         if (this.deviceStateManager.Value is DeviceStateManager localDeviceStateManager)
                             foreach (var retrievedState in deviceConfiguration.States)
                                 localDeviceStateManager.SetLocalState(
-                                    new DeviceTarget(
-                                        retrievedState.contact.Channel,
-                                        deviceConfiguration.Identifier,
-                                        retrievedState.contact.Contact),
+                                    retrievedState.contact with { Identifier = deviceConfiguration.Identifier },
                                     retrievedState.value);
                     }
                 }

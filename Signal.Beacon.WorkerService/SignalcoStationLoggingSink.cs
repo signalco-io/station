@@ -15,7 +15,7 @@ public class SignalcoStationLoggingSink : ILogEventSink
 {
     private readonly Lazy<IStationStateService> stationStateService;
     private readonly Lazy<ISignalBeaconClient> client;
-    private DateTime? lastSent;
+    private DateTime? lastSent = DateTime.UtcNow;
     private readonly ConcurrentBag<LogEvent> outbox = new();
     private readonly TimeSpan batchPeriod = TimeSpan.FromSeconds(10);
     private string? stationId;
@@ -35,11 +35,11 @@ public class SignalcoStationLoggingSink : ILogEventSink
         outbox.Add(logEvent);
 
         // Check if we need to send outbox batch
-        if (lastSent != null && !(DateTime.UtcNow - lastSent > batchPeriod)) 
+        if (lastSent != null && DateTime.UtcNow - lastSent <= batchPeriod) 
             return;
 
         // Take all from outbox
-        var toSend = new List<LogEvent>();
+        var toSend = new List<LogEvent>(outbox.Count);
         lock (outbox)
         {
             lastSent = DateTime.UtcNow;
@@ -60,16 +60,7 @@ public class SignalcoStationLoggingSink : ILogEventSink
         }
     }
 
-    private async Task<string> GetStationIdAsync()
-    {
-        // Return cached
-        if (!string.IsNullOrWhiteSpace(this.stationId)) 
-            return this.stationId;
-
-        var stationState = await this.stationStateService.Value.GetAsync(CancellationToken.None);
-        this.stationId = stationState.Id;
-        return this.stationId;
-    }
+    private async Task<string> GetStationIdAsync() => this.stationId ??= (await this.stationStateService.Value.GetAsync(CancellationToken.None)).Id;
 
     private record Entry(DateTimeOffset TimeStamp, int Level, string Message) : ISignalcoStationLoggingEntry;
 }
