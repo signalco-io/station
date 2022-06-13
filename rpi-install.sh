@@ -46,6 +46,8 @@ sudo apt-get install -y make g++ gcc bluez jq mosquitto net-tools
 echo "listener 1883
 allow_anonymous true" > /etc/mosquitto/conf.d/mosquitto.conf
 
+CURRENT_USER=$(whoami)
+
 ## Download latest station
 echo "Downloading latest stable station..."
 URL=$( curl -s "https://api.github.com/repos/signalco-io/station/releases/latest" | jq -r '.assets[] | select(.name | test("beacon-v(.*)-linux-arm64.tar.gz")) | .browser_download_url' )
@@ -54,11 +56,10 @@ curl -LO "$URL"
 echo "Extracting station files..."
 sudo mkdir -p /opt/signalcostation
 sudo tar -xf ./$FILENAME.tar.gz -C /opt/signalcostation
-sudo chown -R ubuntu:ubuntu /opt/signalcostation
+sudo chown -R $CURRENT_USER:$CURRENT_USER /opt/signalcostation
 cd /opt/signalcostation || exit
 
 ## Configure service
-CURRENT_USER=$(whoami)
 echo "Creating service file signalcostation.service and enableing..."
 service_path="/etc/systemd/system/signalcostation.service"
 echo "[Unit]
