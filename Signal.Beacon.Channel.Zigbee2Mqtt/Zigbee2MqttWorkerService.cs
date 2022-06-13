@@ -40,6 +40,8 @@ internal class Zigbee2MqttWorkerService : IWorkerService
     private Zigbee2MqttWorkerServiceConfiguration configuration = new();
     private CancellationToken startCancellationToken = CancellationToken.None;
 
+    private readonly List<DeviceTarget> knownTargets = new();
+    private static readonly JsonSerializerOptions caseInsensitiveOptions = new() { PropertyNameCaseInsensitive = true };
 
     public Zigbee2MqttWorkerService(
         IDevicesDao devicesDao,
@@ -268,7 +270,15 @@ internal class Zigbee2MqttWorkerService : IWorkerService
                 if (input == null)
                     continue;
 
-                var target = new DeviceTarget(Zigbee2MqttChannels.DeviceChannel, device.Identifier, jProperty.Name);
+                var target = this.knownTargets.FirstOrDefault(t =>
+                    t.Identifier == device.Identifier &&
+                    t.Contact == jProperty.Name);
+                if (target == null)
+                {
+                    target = new DeviceTarget(Zigbee2MqttChannels.DeviceChannel, device.Identifier, jProperty.Name);
+                    knownTargets.Add(target);
+                }
+
                 var value = jProperty.Value.Value<string>();
                 var dataType = input.DataType;
                 var mappedValue = MapZ2MValueToValue(dataType, value);
@@ -280,7 +290,8 @@ internal class Zigbee2MqttWorkerService : IWorkerService
 
                 try
                 {
-                    await this.deviceSetStateHandler.HandleAsync(new DeviceStateSetCommand(target, mappedValue),
+                    await this.deviceSetStateHandler.HandleAsync(
+                        new DeviceStateSetCommand(target, mappedValue),
                         cancellationToken);
                 }
                 catch (Exception ex)
@@ -293,8 +304,7 @@ internal class Zigbee2MqttWorkerService : IWorkerService
 
     private async Task HandleDevicesConfigChangeAsync(string messagePayload, CancellationToken cancellationToken)
     {
-        var config = JsonSerializer.Deserialize<List<BridgeDevice>>(messagePayload,
-            new JsonSerializerOptions {PropertyNameCaseInsensitive = true});
+        var config = JsonSerializer.Deserialize<List<BridgeDevice>>(messagePayload, caseInsensitiveOptions);
         if (config == null) 
             return;
 

@@ -27,7 +27,8 @@ internal class SignalClient : ISignalClient, ISignalClientAuthFlow
 
     public event EventHandler<AuthToken?>? OnTokenRefreshed;
 
-    
+    private static readonly JsonSerializerOptions caseInsensitiveOptions = new() { PropertyNameCaseInsensitive = true };
+
     public SignalClient(ILogger<SignalClient> logger)
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -132,7 +133,7 @@ internal class SignalClient : ISignalClient, ISignalClientAuthFlow
                 try
                 {
                     var responseData = await response.Content.ReadFromJsonAsync<TResponse>(
-                        new JsonSerializerOptions {PropertyNameCaseInsensitive = true},
+                        caseInsensitiveOptions,
                         cancellationToken);
                     return responseData;
                 }
@@ -160,7 +161,7 @@ internal class SignalClient : ISignalClient, ISignalClientAuthFlow
             return await this.circuitBreakerPolicy.ExecuteAsync(async () =>
                 await this.client.GetFromJsonAsync<T>(
                     $"{SignalApiUrl}{url}",
-                    new JsonSerializerOptions {PropertyNameCaseInsensitive = true},
+                    caseInsensitiveOptions,
                     cancellationToken));
         });
     }

@@ -6,6 +6,7 @@ then
 fi
 
 ## Download latest station
+CURRENT_USER=$(whoami)
 echo "Downloading latest stable station..."
 URL=$( curl -s "https://api.github.com/repos/signalco-io/station/releases/latest" | jq -r '.assets[] | select(.name | test("beacon-v(.*)-linux-arm64.tar.gz")) | .browser_download_url' )
 FILENAME=$( echo $URL | grep -oP "beacon-v\d*.\d*.\d*-linux-arm64" )
@@ -13,7 +14,7 @@ curl -LO "$URL"
 echo "Extracting station files..."
 sudo mkdir -p /opt/signalcostation
 sudo tar -xf ./$FILENAME.tar.gz -C /opt/signalcostation
-sudo chown -R ubuntu:ubuntu /opt/signalcostation
+sudo chown -R $CURRENT_USER:$CURRENT_USER /opt/signalcostation
 cd /opt/signalcostation || exit
 
 ## Stop station
@@ -32,7 +33,7 @@ WorkingDirectory=/opt/signalcostation/$FILENAME
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-User=ubuntu
+User=$CURRENT_USER
 [Install]
 WantedBy=multi-user.target" > $service_path
 sudo systemctl enable signalcostation.service
