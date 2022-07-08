@@ -4,7 +4,6 @@ using System.Text.Json;
 using Newtonsoft.Json;
 using Signal.Beacon.Core.Conditions;
 using Signal.Beacon.Core.Conducts;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Processes;
 using Xunit;
 using JsonSerializer = System.Text.Json.JsonSerializer;

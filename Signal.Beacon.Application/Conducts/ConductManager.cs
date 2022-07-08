@@ -8,7 +8,6 @@ using Signal.Beacon.Application.PubSub;
 using Signal.Beacon.Application.Signal.SignalR;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Structures.Queues;
 
 namespace Signal.Beacon.Application.Conducts;

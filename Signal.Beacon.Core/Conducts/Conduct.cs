@@ -1,5 +1,3 @@
-using Signal.Beacon.Core.Devices;
-
 namespace Signal.Beacon.Core.Conducts;
 
 public class Conduct

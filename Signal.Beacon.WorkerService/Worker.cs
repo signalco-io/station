@@ -7,30 +7,32 @@ using Microsoft.Extensions.Logging;
 using Signal.Beacon.Application;
 using Signal.Beacon.Application.Auth;
 using Signal.Beacon.Application.Auth0;
-using Signal.Beacon.Application.Signal;
+using Signal.Beacon.Application.Signal.Client;
+using Signal.Beacon.Application.Signal.Client.Station;
+using Signal.Beacon.Application.Signal.Station;
 using Signal.Beacon.Core.Configuration;
 
 namespace Signal.Beacon;
 
 public class Worker : BackgroundService
 {
-    private readonly ISignalBeaconClient signalClient;
-    private readonly ISignalClientAuthFlow signalClientAuthFlow;
+    private readonly ISignalcoStationClient signalClient;
+    private readonly ISignalcoClientAuthFlow signalcoClientAuthFlow;
     private readonly IConfigurationService configurationService;
     private readonly IWorkerServiceManager workerServiceManager;
     private readonly IStationStateManager stationStateManager;
     private readonly ILogger<Worker> logger;
 
     public Worker(
-        ISignalBeaconClient signalClient,
-        ISignalClientAuthFlow signalClientAuthFlow,
+        ISignalcoStationClient signalClient,
+        ISignalcoClientAuthFlow signalcoClientAuthFlow,
         IConfigurationService configurationService,
         IWorkerServiceManager workerServiceManager,
         IStationStateManager stationStateManager,
         ILogger<Worker> logger)
     {
         this.signalClient = signalClient ?? throw new ArgumentNullException(nameof(signalClient));
-        this.signalClientAuthFlow = signalClientAuthFlow ?? throw new ArgumentNullException(nameof(signalClientAuthFlow));
+        this.signalcoClientAuthFlow = signalcoClientAuthFlow ?? throw new ArgumentNullException(nameof(signalcoClientAuthFlow));
         this.configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         this.workerServiceManager = workerServiceManager ?? throw new ArgumentNullException(nameof(workerServiceManager));
         this.stationStateManager = stationStateManager;
@@ -40,7 +42,7 @@ public class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Load configuration
-        var config = await this.configurationService.LoadAsync<BeaconConfiguration>("beacon.json", stoppingToken);
+        var config = await this.configurationService.LoadAsync<StationConfiguration>("beacon.json", stoppingToken);
         if (config.Token == null || config.Identifier == null)
         {
             this.logger.LogInformation("Beacon not registered. Started registration...");
@@ -67,7 +69,7 @@ public class Worker : BackgroundService
                 this.logger.LogInformation("Authorized successfully");
 
                 // Register Beacon
-                this.signalClientAuthFlow.AssignToken(token);
+                this.signalcoClientAuthFlow.AssignToken(token);
                 await this.signalClient.RegisterBeaconAsync(config.Identifier, stoppingToken);
                 this.logger.LogInformation("Registered successfully");
 
@@ -83,10 +85,10 @@ public class Worker : BackgroundService
         }
         else
         {
-            this.signalClientAuthFlow.AssignToken(config.Token);
+            this.signalcoClientAuthFlow.AssignToken(config.Token);
         }
 
-        this.signalClientAuthFlow.OnTokenRefreshed += this.SignalClientAuthFlowOnOnTokenRefreshed;
+        this.signalcoClientAuthFlow.OnTokenRefreshed += this.SignalcoClientAuthFlowOnOnTokenRefreshed;
 
         // Start state reporting
         await this.stationStateManager.BeginMonitoringStateAsync(stoppingToken);
@@ -102,12 +104,12 @@ public class Worker : BackgroundService
         await this.workerServiceManager.StopAllWorkerServicesAsync();
     }
 
-    private async void SignalClientAuthFlowOnOnTokenRefreshed(object? sender, AuthToken? e)
+    private async void SignalcoClientAuthFlowOnOnTokenRefreshed(object? sender, AuthToken? e)
     {
         try
         {
             var config =
-                await this.configurationService.LoadAsync<BeaconConfiguration>("Beacon.json",
+                await this.configurationService.LoadAsync<StationConfiguration>("Beacon.json",
                     CancellationToken.None);
             config.Token = e;
             await this.configurationService.SaveAsync("Beacon.json", config, CancellationToken.None);

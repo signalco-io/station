@@ -2,21 +2,23 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Signal.Beacon.Application.Signal.Client;
+using Signal.Beacon.Application.Signal.Client.Contact;
 
 namespace Signal.Beacon.Application.Signal.SignalR;
 
 internal class SignalSignalRDevicesHubClient : SignalSignalRHubHubClient, ISignalSignalRDevicesHubClient
 {
     public SignalSignalRDevicesHubClient(
-        ISignalClientAuthFlow signalClientAuthFlow, 
+        ISignalcoClientAuthFlow signalcoClientAuthFlow, 
         ILogger<SignalSignalRHubHubClient> logger) : 
-        base(signalClientAuthFlow, logger)
+        base(signalcoClientAuthFlow, logger)
     {
     }
 
     public override Task StartAsync(CancellationToken cancellationToken) => 
-        this.StartAsync("devices", cancellationToken);
+        this.StartAsync("contacts", cancellationToken);
 
-    public void OnDeviceState(Func<SignalDeviceStatePublishDto, CancellationToken, Task> handler, CancellationToken cancellationToken) => 
-        this.On<SignalDeviceStatePublishDto>("devicestate", async state => await handler(state, cancellationToken), cancellationToken);
+    public void OnDeviceState(Func<SignalcoContactUpsertDto, CancellationToken, Task> handler, CancellationToken cancellationToken) => 
+        this.On<SignalcoContactUpsertDto>("contact", async state => await handler(state, cancellationToken), cancellationToken);
 }

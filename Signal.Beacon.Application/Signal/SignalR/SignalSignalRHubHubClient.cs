@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Signal.Beacon.Application.Signal.Client;
 
 namespace Signal.Beacon.Application.Signal.SignalR;
 
@@ -12,7 +13,7 @@ internal abstract class SignalSignalRHubHubClient
 {
     protected CancellationToken? StartCancellationToken;
 
-    private readonly ISignalClientAuthFlow signalClientAuthFlow;
+    private readonly ISignalcoClientAuthFlow signalcoClientAuthFlow;
     private readonly ILogger<SignalSignalRHubHubClient> logger;
     private HubConnection? connection;
     private readonly object startLock = new();
@@ -20,10 +21,10 @@ internal abstract class SignalSignalRHubHubClient
     private readonly Dictionary<string, (Type argType, Func<object[], Task> action)> actions = new();
 
     protected SignalSignalRHubHubClient(
-        ISignalClientAuthFlow signalClientAuthFlow,
+        ISignalcoClientAuthFlow signalcoClientAuthFlow,
         ILogger<SignalSignalRHubHubClient> logger)
     {
-        this.signalClientAuthFlow = signalClientAuthFlow ?? throw new ArgumentNullException(nameof(signalClientAuthFlow));
+        this.signalcoClientAuthFlow = signalcoClientAuthFlow ?? throw new ArgumentNullException(nameof(signalcoClientAuthFlow));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -74,7 +75,7 @@ internal abstract class SignalSignalRHubHubClient
                         var retryCount = 0;
                         while (!this.StartCancellationToken.Value.IsCancellationRequested)
                         {
-                            if (await this.signalClientAuthFlow.GetTokenAsync(this.StartCancellationToken.Value) !=
+                            if (await this.signalcoClientAuthFlow.GetTokenAsync(this.StartCancellationToken.Value) !=
                                 null)
                                 break;
 
@@ -88,7 +89,7 @@ internal abstract class SignalSignalRHubHubClient
                             await Task.Delay(delay, this.StartCancellationToken.Value);
                         }
 
-                        var tokenResult = await this.signalClientAuthFlow.GetTokenAsync(this.StartCancellationToken.Value);
+                        var tokenResult = await this.signalcoClientAuthFlow.GetTokenAsync(this.StartCancellationToken.Value);
                         return tokenResult?.AccessToken;
                     };
                 })

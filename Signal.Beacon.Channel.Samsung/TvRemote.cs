@@ -13,7 +13,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Network;
 using Websocket.Client;
 using Timer = System.Timers.Timer;

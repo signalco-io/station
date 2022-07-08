@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Signal.Beacon.Application.Conducts;
 using Signal.Beacon.Core.Conditions;
 using Signal.Beacon.Core.Conducts;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Processes;
 using Signal.Beacon.Core.Structures.Queues;
 

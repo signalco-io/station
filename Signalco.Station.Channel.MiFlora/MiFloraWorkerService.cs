@@ -2,7 +2,6 @@
 using HashtagChris.DotNetBlueZ.Extensions;
 using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Architecture;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Shell;
 using Signal.Beacon.Core.Workers;
 using Tmds.DBus;

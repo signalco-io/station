@@ -5,7 +5,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +15,6 @@ using OpenTK.Audio.OpenAL;
 using Pv;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Workers;
 
 namespace Signal.Beacon.Voice;
@@ -24,68 +22,67 @@ namespace Signal.Beacon.Voice;
 public class SpeechResultEvaluator
 {
     private readonly ICommandHandler<ConductPublishCommand> publishConduct;
-    private readonly IDevicesDao devicesDao;
     private readonly ILogger<SpeechResultEvaluator> logger;
 
 
     public SpeechResultEvaluator(
         ICommandHandler<ConductPublishCommand> publishConduct,
-        IDevicesDao devicesDao,
         ILogger<SpeechResultEvaluator> logger)
     {
         this.publishConduct = publishConduct ?? throw new ArgumentNullException(nameof(publishConduct));
-        this.devicesDao = devicesDao ?? throw new ArgumentNullException(nameof(devicesDao));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
 
-    public async Task EvaluateResultAsync(SpeechResult result, CancellationToken cancellationToken)
+    public Task EvaluateResultAsync(SpeechResult result, CancellationToken cancellationToken)
     {
-        // Check confidence
-        if (result.Confidence < 0.75)
-        {
-            this.logger.LogTrace("Confidence too low for result: {@Result}", result);
-            return;
-        }
+        // TODO: Implement
+        return Task.CompletedTask;
+        //// Check confidence
+        //if (result.Confidence < 0.75)
+        //{
+        //    this.logger.LogTrace("Confidence too low for result: {@Result}", result);
+        //    return;
+        //}
 
-        // Remove language specific characters
-        var decomposed = result.Transcript.Normalize(NormalizationForm.FormD);
-        var filtered = decomposed.Where(c => char.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark);
-        var transcriptFiltered = new string(filtered.ToArray());
+        //// Remove language specific characters
+        //var decomposed = result.Transcript.Normalize(NormalizationForm.FormD);
+        //var filtered = decomposed.Where(c => char.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark);
+        //var transcriptFiltered = new string(filtered.ToArray());
 
-        // TODO: Load language dictionary
-        var nonCategorizedWords = new List<string>();
-        var questionWords = new List<string> { "koliko", "zasto", "kako", "da li", "je li", "hoce li" };
-        var actionPositive = new List<string> { "ukljuci", "upali", "aktiviraj" };
-        var actionNegative = new List<string> { "iskljuci", "ugasi", "deaktiviraj" };
-        // TODO: Load device localized tags
-        var entityType = new List<string>
-        {
+        //// TODO: Load language dictionary
+        //var nonCategorizedWords = new List<string>();
+        //var questionWords = new List<string> { "koliko", "zasto", "kako", "da li", "je li", "hoce li" };
+        //var actionPositive = new List<string> { "ukljuci", "upali", "aktiviraj" };
+        //var actionNegative = new List<string> { "iskljuci", "ugasi", "deaktiviraj" };
+        //// TODO: Load device localized tags
+        //var entityType = new List<string>
+        //{
 
-        };
-        // TODO: Load areas localized
-        var areas = new List<string> {  };
+        //};
+        //// TODO: Load areas localized
+        //var areas = new List<string> {  };
 
-        var tokens = nonCategorizedWords
-            .Union(questionWords)
-            .Union(actionPositive)
-            .Union(actionNegative)
-            .Union(entityType)
-            .Union(areas)
-            .ToList();
+        //var tokens = nonCategorizedWords
+        //    .Union(questionWords)
+        //    .Union(actionPositive)
+        //    .Union(actionNegative)
+        //    .Union(entityType)
+        //    .Union(areas)
+        //    .ToList();
 
-        var tokenized = this.Tokenize(transcriptFiltered, tokens).ToList();
+        //var tokenized = this.Tokenize(transcriptFiltered, tokens).ToList();
 
-        var devices = (await this.devicesDao.GetAllAsync(cancellationToken)).ToList();
-        var deviceNames = devices.Select(d => d.Alias).ToList();
+        //var devices = (await this.devicesDao.GetAllAsync(cancellationToken)).ToList();
+        //var deviceNames = devices.Select(d => d.Alias).ToList();
 
-        var matches = FuzzySharp.Process
-            .ExtractTop(
-                result.Transcript,
-                deviceNames)
-            .ToList();
+        //var matches = FuzzySharp.Process
+        //    .ExtractTop(
+        //        result.Transcript,
+        //        deviceNames)
+        //    .ToList();
 
-        var matchedDevice = devices[matches[0].Index];
+        //var matchedDevice = devices[matches[0].Index];
     }
 
     private IEnumerable<string> Tokenize(string query, List<string> tokens)

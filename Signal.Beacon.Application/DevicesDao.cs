@@ -4,81 +4,62 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Entity;
 using Signal.Beacon.Core.Signal;
 
 namespace Signal.Beacon.Application;
 
-public class DevicesDao : IDevicesDao
+public class EntitiesDao : IEntitiesDao
 {
-    private readonly ISignalDevicesClient devicesClient;
+    private readonly ISignalcoEntityClient entitiesClient;
     private readonly Lazy<IDeviceStateManager> deviceStateManager;
-    private readonly ILogger<DevicesDao> logger;
-    private Dictionary<string, DeviceConfiguration>? devices;
+    private readonly ILogger<EntitiesDao> logger;
+    private Dictionary<string, IEntityDetails>? entities;
     private readonly object cacheLock = new();
-    private Task<IEnumerable<DeviceWithState>>? getDevicesTask;
+    private Task<IEnumerable<IEntityDetails>>? getEntitiesTask;
 
-    public DevicesDao(
-        ISignalDevicesClient devicesClient,
+    public EntitiesDao(
+        ISignalcoEntityClient devicesClient,
         Lazy<IDeviceStateManager> deviceStateManager,
-        ILogger<DevicesDao> logger)
+        ILogger<EntitiesDao> logger)
     {
-        this.devicesClient = devicesClient ?? throw new ArgumentNullException(nameof(devicesClient));
+        this.entitiesClient = devicesClient ?? throw new ArgumentNullException(nameof(devicesClient));
         this.deviceStateManager = deviceStateManager ?? throw new ArgumentNullException(nameof(deviceStateManager));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<DeviceConfiguration?> GetByAliasAsync(string alias, CancellationToken cancellationToken)
+    public async Task<IEntityDetails?> GetByAliasAsync(string alias, CancellationToken cancellationToken)
     {
         await this.CacheDevicesAsync(cancellationToken);
 
-        return this.devices?.Values.FirstOrDefault(d => d.Alias == alias);
+        return this.entities?.Values.FirstOrDefault(d => d.Alias == alias);
     }
-
-    public async Task<DeviceContact?> GetInputContactAsync(DeviceTarget target, CancellationToken cancellationToken)
+    
+    public async Task<IEntityDetails?> GetAsync(string id, CancellationToken cancellationToken)
     {
         await this.CacheDevicesAsync(cancellationToken);
 
-        var device = await this.GetAsync(target.Identifier, cancellationToken);
-        return device?.Endpoints
-            .Where(d => d.Channel == target.Channel)
-            .SelectMany(d => d.Contacts)
-            .Where(c => c.Access.HasFlag(DeviceContactAccess.Read) || c.Access.HasFlag(DeviceContactAccess.Get))
-            .FirstOrDefault(c => c.Name == target.Contact);
-    }
-
-    public async Task<DeviceConfiguration?> GetByIdAsync(string deviceId, CancellationToken cancellationToken)
-    {
-        await this.CacheDevicesAsync(cancellationToken);
-
-        return this.devices?.Values.FirstOrDefault(d => d.Id == deviceId);
-    }
-
-    public async Task<DeviceConfiguration?> GetAsync(string identifier, CancellationToken cancellationToken)
-    {
-        await this.CacheDevicesAsync(cancellationToken);
-
-        if (this.devices != null && 
-            this.devices.TryGetValue(identifier, out var device))
+        if (this.entities != null && 
+            this.entities.TryGetValue(id, out var device))
             return device;
         return null;
     }
 
-    public async Task<IEnumerable<DeviceConfiguration>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<IEntityDetails>> AllAsync(CancellationToken cancellationToken)
     {
         await this.CacheDevicesAsync(cancellationToken);
 
-        return this.devices?.Values.AsEnumerable() ?? Enumerable.Empty<DeviceConfiguration>();
+        return this.entities?.Values.AsEnumerable() ?? Enumerable.Empty<IEntityDetails>();
     }
         
-    public Task<object?> GetStateAsync(DeviceTarget deviceTarget, CancellationToken cancellationToken) => 
-        this.deviceStateManager.Value.GetStateAsync(deviceTarget);
+    public Task<object?> ContactAsync(ContactPointer pointer, CancellationToken cancellationToken) => 
+        this.deviceStateManager.Value.GetStateAsync(pointer, cancellationToken);
 
-    public void InvalidateDevice()
+    public void InvalidateEntity()
     {
         lock (this.cacheLock)
         {
-            this.devices = null;
+            this.entities = null;
         }
 
         this.logger.LogDebug("Devices cache invalidated");
@@ -86,26 +67,26 @@ public class DevicesDao : IDevicesDao
 
     private async Task CacheDevicesAsync(CancellationToken cancellationToken)
     {
-        if (this.devices != null)
+        if (this.entities != null)
             return;
 
         try
         {
-            this.getDevicesTask ??= this.devicesClient.GetDevicesAsync(cancellationToken);
+            this.getEntitiesTask ??= this.entitiesClient.AllAsync(cancellationToken);
 
-            var remoteDevices = (await this.getDevicesTask).ToList();
+            var remoteDevices = (await this.getEntitiesTask).ToList();
 
             lock (this.cacheLock)
             {
-                if (this.devices != null)
+                if (this.entities != null)
                     return;
 
                 try
                 {
-                    this.devices = new Dictionary<string, DeviceConfiguration>();
+                    this.entities = new Dictionary<string, IEntityDetails>();
                     foreach (var deviceConfiguration in remoteDevices)
                     {
-                        this.devices.Add(deviceConfiguration.Identifier, deviceConfiguration);
+                        this.entities.Add(deviceConfiguration.Id, deviceConfiguration);
 
                         // Set local state
                         if (this.deviceStateManager.Value is DeviceStateManager localDeviceStateManager)
@@ -117,14 +98,14 @@ public class DevicesDao : IDevicesDao
                 }
                 finally
                 {
-                    this.getDevicesTask = null;
+                    this.getEntitiesTask = null;
                 }
             }
         }
         catch (Exception ex)
         {
-            this.logger.LogDebug(ex, "Cache devices from SignalAPI failed.");
-            this.logger.LogWarning( "Failed to load devices from Signal.");
+            this.logger.LogDebug(ex, "Cache entities from SignalcoAPI failed.");
+            this.logger.LogWarning( "Failed to load entities from Signalco.");
         }
     }
 }

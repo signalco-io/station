@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Network;
 
-namespace Signal.Beacon.Application.Mqtt;
+namespace Signal.Beacon.Core.Mqtt;
 
 public interface IMqttDiscoveryService
 {

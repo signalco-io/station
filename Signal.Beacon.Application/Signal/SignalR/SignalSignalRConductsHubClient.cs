@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Signal.Beacon.Application.Signal.Client;
 
 namespace Signal.Beacon.Application.Signal.SignalR;
 
@@ -12,10 +13,10 @@ internal class SignalSignalRConductsHubClient : SignalSignalRHubHubClient, ISign
     private readonly ILogger<SignalSignalRConductsHubClient> logger;
 
     public SignalSignalRConductsHubClient(
-        ISignalClientAuthFlow signalClientAuthFlow, 
+        ISignalcoClientAuthFlow signalcoClientAuthFlow, 
         ILogger<SignalSignalRHubHubClient> logger,
         ILogger<SignalSignalRConductsHubClient> conductsLogger) : 
-        base(signalClientAuthFlow, logger)
+        base(signalcoClientAuthFlow, logger)
     {
         this.logger = conductsLogger ?? throw new ArgumentNullException(nameof(conductsLogger));
     }

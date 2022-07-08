@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Entity;
 using Signal.Beacon.Core.Processes;
 using Signal.Beacon.Core.Signal;
 

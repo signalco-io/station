@@ -1,5 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Signal.Beacon.Application.Signal.Client;
+using Signal.Beacon.Application.Signal.Client.Entity;
+using Signal.Beacon.Application.Signal.Client.Station;
 using Signal.Beacon.Application.Signal.SignalR;
+using Signal.Beacon.Application.Signal.Station;
 using Signal.Beacon.Core.Extensions;
 using Signal.Beacon.Core.Signal;
 
@@ -10,11 +14,10 @@ public static class SignalExtensions
     public static IServiceCollection AddSignalApi(this IServiceCollection services)
     {
         return services
-            .AddTransient<ISignalDevicesClient, SignalDevicesClient>()
-            .AddTransient<ISignalBeaconClient, SignalBeaconClient>()
+            .AddTransient<ISignalcoEntityClient, SignalcoEntityClient>()
+            .AddTransient<ISignalcoStationClient, SignalcoStationClient>()
             .AddTransient<IStationStateService, StationStateService>()
-            .AddTransient<ISignalProcessesClient, SignalProcessesClient>()
-            .AddSingleton<ISignalClient, ISignalClientAuthFlow, SignalClient>()
+            .AddSingleton<ISignalClient, ISignalcoClientAuthFlow, SignalcoClient>()
             .AddSingleton<ISignalSignalRDevicesHubClient, SignalSignalRDevicesHubClient>()
             .AddSingleton<ISignalSignalRConductsHubClient, SignalSignalRConductsHubClient>();
     }

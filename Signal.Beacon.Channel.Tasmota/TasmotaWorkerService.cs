@@ -5,11 +5,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Signal.Beacon.Application.Mqtt;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Workers;
 

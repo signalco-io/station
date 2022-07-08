@@ -6,6 +6,8 @@ using Serilog;
 using Serilog.Events;
 using Signal.Beacon.Application;
 using Signal.Beacon.Application.Signal;
+using Signal.Beacon.Application.Signal.Client.Station;
+using Signal.Beacon.Application.Signal.Station;
 using Signal.Beacon.Channel.iRobot;
 using Signal.Beacon.Channel.PhilipsHue;
 using Signal.Beacon.Channel.Samsung;
@@ -59,6 +61,6 @@ public static class Program
                     .WriteTo.Console()
                     .WriteTo.SignalcoStationLogging(
                         new Lazy<IStationStateService>(provider.GetRequiredService<IStationStateService>),
-                new Lazy<ISignalBeaconClient>(provider.GetRequiredService<ISignalBeaconClient>));
+                new Lazy<ISignalcoStationClient>(provider.GetRequiredService<ISignalcoStationClient>));
             });
 }

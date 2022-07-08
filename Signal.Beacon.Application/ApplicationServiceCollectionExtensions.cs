@@ -6,11 +6,11 @@ using Signal.Beacon.Application.Network;
 using Signal.Beacon.Application.Processing;
 using Signal.Beacon.Application.PubSub;
 using Signal.Beacon.Application.Shell;
-using Signal.Beacon.Application.Signal;
+using Signal.Beacon.Application.Signal.Station;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conditions;
 using Signal.Beacon.Core.Conducts;
-using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Entity;
 using Signal.Beacon.Core.Mqtt;
 using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Processes;
@@ -27,13 +27,9 @@ public static class ApplicationServiceCollectionExtensions
 
         services.AddTransient<IConditionEvaluatorService, ConditionEvaluatorService>();
         services.AddSingleton<IConditionEvaluatorValueProvider, ConditionEvaluatorValueProvider>();
-        services.AddTransient<ICommandHandler<DeviceStateSetCommand>, DevicesCommandHandler>();
-        services.AddTransient<ICommandHandler<DeviceDiscoveredCommand>, DevicesCommandHandler>();
-        services.AddTransient<ICommandValueHandler<DeviceDiscoveredCommand, string>, DevicesCommandHandler>();
-        services.AddTransient<ICommandHandler<DeviceContactUpdateCommand>, DevicesCommandHandler>();
         services.AddTransient<ICommandHandler<ConductPublishCommand>, ConductManager>();
         services.AddTransient<IProcessesService, ProcessesService>();
-        services.AddSingleton<IDevicesDao, DevicesDao>();
+        services.AddSingleton<IEntitiesDao, EntitiesDao>();
         services.AddSingleton<IProcessesDao, ProcessesDao>();
         services.AddSingleton<IDeviceStateManager, DeviceStateManager>();
         services.AddSingleton<IStationStateManager, StationStateManager>();
@@ -47,7 +43,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddTransient<IMqttDiscoveryService, MqttDiscoveryService>();
 
         // PubSub
-        services.AddTransient<IPubSubHub<DeviceTarget>, PubSubHub<DeviceTarget>>();
+        services.AddTransient<IPubSubHub<ContactPointer>, PubSubHub<ContactPointer>>();
         services.AddTransient<IPubSubTopicHub<Conduct>, PubSubTopicHub<Conduct>>();
 
         // Processing

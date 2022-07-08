@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Signal.Beacon.Core.Conditions;
-using Signal.Beacon.Core.Devices;
 
 namespace Signal.Beacon.Application;
 

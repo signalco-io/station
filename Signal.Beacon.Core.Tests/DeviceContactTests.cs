@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using Signal.Beacon.Core.Devices;
 using Xunit;
 
 namespace Signal.Beacon.Core.Tests

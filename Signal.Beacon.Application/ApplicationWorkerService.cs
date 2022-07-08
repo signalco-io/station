@@ -7,8 +7,8 @@ using Microsoft.Extensions.Logging;
 using Signal.Beacon.Application.Conducts;
 using Signal.Beacon.Application.Lifetime;
 using Signal.Beacon.Application.Processing;
-using Signal.Beacon.Application.Signal;
 using Signal.Beacon.Application.Signal.SignalR;
+using Signal.Beacon.Application.Signal.Station;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
 using Signal.Beacon.Core.Workers;
@@ -63,7 +63,7 @@ internal class ApplicationWorkerService : IWorkerService
     {
         this.logger.LogDebug("Processing station conducts...");
             
-        var config = await this.configurationService.LoadAsync<BeaconConfiguration>("beacon.json", cancellationToken);
+        var config = await this.configurationService.LoadAsync<StationConfiguration>("beacon.json", cancellationToken);
         if (string.IsNullOrWhiteSpace(config.Identifier))
             throw new Exception("Can't generate state report without identifier.");
             

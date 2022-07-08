@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Signal.Beacon.Core.Architecture;
 using Signal.Beacon.Core.Conducts;
 using Signal.Beacon.Core.Configuration;
-using Signal.Beacon.Core.Devices;
 using Signal.Beacon.Core.Network;
 using Signal.Beacon.Core.Workers;
 

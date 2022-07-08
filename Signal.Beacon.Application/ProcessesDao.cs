@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Signal.Beacon.Core;
 using Signal.Beacon.Core.Conditions;
-using Signal.Beacon.Core.Devices;
+using Signal.Beacon.Core.Entity;
 using Signal.Beacon.Core.Processes;
 using Signal.Beacon.Core.Signal;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -20,7 +20,7 @@ namespace Signal.Beacon.Application;
 
 public class ProcessesDao : IProcessesDao
 {
-    private readonly ISignalProcessesClient processesClient;
+    private readonly ISignalcoEntityClient entityClient;
     private readonly ILogger<ProcessesDao> logger;
         
     // Caching
@@ -31,13 +31,13 @@ public class ProcessesDao : IProcessesDao
     private readonly JsonSerializerSettings deserializationSettings;
     private List<Process>? processes;
     private List<Process>? stateTriggerProcesses;
-    private Task<IEnumerable<Process>>? getProcessesTask;
+    private Task<IEnumerable<IEntityDetails>>? getProcessesTask;
 
     public ProcessesDao(
-        ISignalProcessesClient processesClient,
+        ISignalcoEntityClient entityClient,
         ILogger<ProcessesDao> logger)
     {
-        this.processesClient = processesClient ?? throw new ArgumentNullException(nameof(processesClient));
+        this.entityClient = entityClient ?? throw new ArgumentNullException(nameof(entityClient));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         this.deserializationSettings = new JsonSerializerSettings
@@ -115,9 +115,9 @@ public class ProcessesDao : IProcessesDao
         {
             this.logger.LogDebug("Loading processes...");
 
-            this.getProcessesTask ??= this.processesClient.GetProcessesAsync(cancellationToken);
+            this.getProcessesTask ??= this.entityClient.AllAsync(cancellationToken);
 
-            var remoteProcesses = (await this.getProcessesTask).ToList();
+            var remoteProcesses = (await this.getProcessesTask).ToList().Where(e => e.Type == EntityType.Process);
 
             lock (this.cacheLock)
             {
